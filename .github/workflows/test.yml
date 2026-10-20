@@ -1,0 +1,23 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      # IntegrationTests need a running StitchDB stack (`stitchdb start`)
+      - run: swift test --skip IntegrationTests
+
+  linux:
+    # the runner's preinstalled Swift toolchain (6.2 or newer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      - run: swift test --skip IntegrationTests

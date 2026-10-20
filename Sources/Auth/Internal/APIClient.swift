@@ -1,0 +1,178 @@
+import Foundation
+import HTTPTypes
+
+extension HTTPClient {
+  init(configuration: AuthClient.Configuration) {
+    var interceptors: [any HTTPClientInterceptor] = []
+    if let logger = configuration.logger {
+      interceptors.append(LoggerInterceptor(logger: logger))
+    }
+
+    interceptors.append(
+      RetryRequestInterceptor(
+        retryableHTTPMethods: RetryRequestInterceptor.defaultRetryableHTTPMethods.union(
+          [.post]  // Add POST method so refresh token are also retried.
+        )
+      )
+    )
+
+    self.init(fetch: configuration.fetch, interceptors: interceptors)
+  }
+}
+
+struct APIClient: Sendable {
+  let clientID: AuthClientID
+
+  var configuration: AuthClient.Configuration {
+    Dependencies[clientID].configuration
+  }
+
+  var sessionManager: SessionManager {
+    Dependencies[clientID].sessionManager
+  }
+
+  var eventEmitter: AuthStateChangeEventEmitter {
+    Dependencies[clientID].eventEmitter
+  }
+
+  var http: any HTTPClientType {
+    Dependencies[clientID].http
+  }
+
+  /// Error codes that should clean up local session.
+  private let sessionCleanupErrorCodes: [ErrorCode] = [
+    .sessionNotFound,
+    .sessionExpired,
+    .refreshTokenNotFound,
+    .refreshTokenAlreadyUsed,
+  ]
+
+  /// Sends `request` with the client's default headers and returns the response.
+  ///
+  /// `session` is the session the request is issued for, when the caller has one. It scopes the
+  /// session cleanup that a `sessionCleanupErrorCodes` response triggers — see
+  /// ``handleError(response:for:)``.
+  func execute(
+    _ request: Helpers.HTTPRequest, for session: Session? = nil
+  ) async throws -> Helpers.HTTPResponse {
+    var request = request
+    request.headers = HTTPFields(configuration.headers).merging(with: request.headers)
+
+    if request.headers[.apiVersionHeaderName] == nil {
+      request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
+    }
+
+    let response = try await http.send(request)
+
+    guard 200..<300 ~= response.statusCode else {
+      throw await handleError(response: response, for: session)
+    }
+
+    return response
+  }
+
+  @discardableResult
+  func authorizedExecute(_ request: Helpers.HTTPRequest) async throws -> Helpers.HTTPResponse {
+    var sessionManager: SessionManager {
+      Dependencies[clientID].sessionManager
+    }
+
+    let session = try await sessionManager.session()
+
+    var request = request
+    request.headers[.authorization] = "Bearer \(session.accessToken)"
+
+    return try await execute(request, for: session)
+  }
+
+  /// Pass `session` whenever the caller knows which session the request belongs to. A response
+  /// carrying a `sessionCleanupErrorCodes` code then only clears storage if that session is still
+  /// the stored one, so a request that outlived a sign-out cannot sign out whoever signed in
+  /// after it. Callers with no session of their own (sign-in, sign-up, `/logout`) pass `nil` and
+  /// keep the unconditional cleanup they have always had.
+  func handleError(response: Helpers.HTTPResponse, for session: Session? = nil) async -> AuthError {
+    guard
+      let error = try? response.decoded(
+        as: _RawAPIErrorResponse.self,
+        decoder: configuration.resolvedDecoder
+      )
+    else {
+      return .api(
+        message: "Unexpected error",
+        errorCode: .unexpectedFailure,
+        underlyingData: response.data,
+        underlyingResponse: response.underlyingResponse
+      )
+    }
+
+    let responseAPIVersion = parseResponseAPIVersion(response)
+
+    let errorCode: ErrorCode? =
+      if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp,
+        let code = error.code
+      {
+        ErrorCode(code)
+      } else {
+        error.errorCode
+      }
+
+    if errorCode == nil, let weakPassword = error.weakPassword {
+      return .weakPassword(
+        message: error._getErrorMessage(),
+        reasons: weakPassword.reasons ?? []
+      )
+    } else if errorCode == .weakPassword {
+      return .weakPassword(
+        message: error._getErrorMessage(),
+        reasons: error.weakPassword?.reasons ?? []
+      )
+    } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
+      // The `session_id` inside the JWT does not correspond to a row in the
+      // `sessions` table. This usually means the user has signed out, has been
+      // deleted, or their session has somehow been terminated.
+      //
+      // Only `session`'s own storage slot may be cleared. A request that was still in flight when
+      // the user signed out — and another user signed in — would otherwise delete the session
+      // that replaced it and sign that user out. The check and the delete happen together inside
+      // the session manager's actor, so a sign-in cannot land between them.
+      if await sessionManager.removeIfUnchanged(session) {
+        eventEmitter.emit(.signedOut, session: nil)
+      }
+      return .sessionMissing
+    } else {
+      return .api(
+        message: error._getErrorMessage(),
+        errorCode: errorCode ?? .unknown,
+        underlyingData: response.data,
+        underlyingResponse: response.underlyingResponse
+      )
+    }
+  }
+
+  private func parseResponseAPIVersion(_ response: Helpers.HTTPResponse) -> Date? {
+    guard let apiVersion = response.headers[.apiVersionHeaderName] else { return nil }
+
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: "\(apiVersion)T00:00:00.0Z")
+  }
+}
+
+// Struct for mapping all fields possibly returned by API.
+struct _RawAPIErrorResponse: Decodable {
+  let msg: String?
+  let message: String?
+  let errorDescription: String?
+  let error: String?
+  let code: String?
+  let errorCode: ErrorCode?
+  let weakPassword: _WeakPassword?
+
+  struct _WeakPassword: Decodable {
+    let reasons: [String]?
+  }
+
+  func _getErrorMessage() -> String {
+    msg ?? message ?? errorDescription ?? error ?? "Unknown"
+  }
+}

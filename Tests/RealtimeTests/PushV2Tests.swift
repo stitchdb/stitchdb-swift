@@ -1,0 +1,378 @@
+//
+//  PushV2Tests.swift
+//  StitchDB
+//
+//  Created by Guilherme Souza on 29/07/25.
+//
+
+import ConcurrencyExtras
+import Foundation
+import Testing
+
+@testable import Realtime
+@testable import RealtimeV2
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+@Suite
+struct PushV2Tests {
+
+  @Test
+  func pushStatusValues() {
+    #expect(PushStatus.ok.rawValue == "ok")
+    #expect(PushStatus.error.rawValue == "error")
+    #expect(PushStatus.timeout.rawValue == "timeout")
+  }
+
+  @Test
+  func pushStatusFromRawValue() {
+    #expect(PushStatus(rawValue: "ok") == .ok)
+    #expect(PushStatus(rawValue: "error") == .error)
+    #expect(PushStatus(rawValue: "timeout") == .timeout)
+    #expect(PushStatus(rawValue: "invalid") == nil)
+  }
+
+  @Test
+  @MainActor
+  func pushV2InitializationWithNilChannel() {
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: nil, message: sampleMessage)
+
+    #expect(push.message.topic == "test:channel")
+    #expect(push.message.event == "broadcast")
+  }
+
+  @Test
+  @MainActor
+  func sendWithNilChannelReturnsError() async {
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: nil, message: sampleMessage)
+
+    let status = await push.send()
+
+    #expect(status == .error)
+  }
+
+  @Test
+  @MainActor
+  func sendWithAckDisabledReturnsOkImmediately() async {
+    let mockSocket = MockRealtimeClient()
+    let config = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: "", enabled: false),
+      isPrivate: false
+    )
+    let mockChannel = MockRealtimeChannel(
+      topic: "test:channel",
+      config: config,
+      socket: mockSocket,
+      logger: nil
+    )
+
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: mockChannel, message: sampleMessage)
+    let status = await push.send()
+
+    #expect(status == PushStatus.ok)
+    #expect(mockSocket.pushedMessages.count == 1)
+    #expect(mockSocket.pushedMessages.first?.topic == "test:channel")
+    #expect(mockSocket.pushedMessages.first?.event == "broadcast")
+  }
+
+  @Test
+  @MainActor
+  func sendWithAckEnabledWaitsForResponse() async {
+    let mockSocket = MockRealtimeClient()
+    let config = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: "", enabled: false),
+      isPrivate: false
+    )
+    let mockChannel = MockRealtimeChannel(
+      topic: "test:channel",
+      config: config,
+      socket: mockSocket,
+      logger: nil
+    )
+
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: mockChannel, message: sampleMessage)
+
+    let sendTask = Task {
+      await push.send()
+    }
+
+    // Give push time to start waiting
+    try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+
+    // Simulate receiving acknowledgment
+    push.didReceive(status: PushStatus.ok)
+
+    let status = await sendTask.value
+    #expect(status == PushStatus.ok)
+    #expect(mockSocket.pushedMessages.count == 1)
+  }
+
+  @Test
+  @MainActor
+  func channelConfigurationForAcknowledgment() {
+    // Test that the channel configuration is properly checked for acknowledgment settings
+    let mockSocket = MockRealtimeClient()
+
+    // Test acknowledgment disabled
+    let configAckDisabled = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: "", enabled: false),
+      isPrivate: false
+    )
+    let channelAckDisabled = MockRealtimeChannel(
+      topic: "test:channel",
+      config: configAckDisabled,
+      socket: mockSocket,
+      logger: nil
+    )
+    #expect(!channelAckDisabled.config.broadcast.acknowledgeBroadcasts)
+
+    // Test acknowledgment enabled
+    let configAckEnabled = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: "", enabled: false),
+      isPrivate: false
+    )
+    let channelAckEnabled = MockRealtimeChannel(
+      topic: "test:channel",
+      config: configAckEnabled,
+      socket: mockSocket,
+      logger: nil
+    )
+    #expect(channelAckEnabled.config.broadcast.acknowledgeBroadcasts)
+  }
+
+  @Test
+  @MainActor
+  func sendWithAckEnabledReceivesError() async {
+    let mockSocket = MockRealtimeClient()
+    let config = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: "", enabled: false),
+      isPrivate: false
+    )
+    let mockChannel = MockRealtimeChannel(
+      topic: "test:channel",
+      config: config,
+      socket: mockSocket,
+      logger: nil
+    )
+
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: mockChannel, message: sampleMessage)
+
+    let sendTask = Task {
+      await push.send()
+    }
+
+    // Give push time to start waiting
+    try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+
+    // Simulate receiving error acknowledgment
+    push.didReceive(status: PushStatus.error)
+
+    let status = await sendTask.value
+    #expect(status == PushStatus.error)
+    #expect(mockSocket.pushedMessages.count == 1)
+  }
+
+  @Test
+  @MainActor
+  func didReceiveStatusWithoutWaitingDoesNothing() {
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: nil, message: sampleMessage)
+
+    // This should not crash or cause issues
+    push.didReceive(status: PushStatus.ok)
+    push.didReceive(status: PushStatus.error)
+    push.didReceive(status: PushStatus.timeout)
+  }
+
+  @Test
+  @MainActor
+  func multipleDidReceiveCallsOnlyFirstMatters() async {
+    let mockSocket = MockRealtimeClient()
+    let config = RealtimeChannelConfig(
+      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: true, receiveOwnBroadcasts: false),
+      presence: PresenceJoinConfig(key: "", enabled: false),
+      isPrivate: false
+    )
+    let mockChannel = MockRealtimeChannel(
+      topic: "test:channel",
+      config: config,
+      socket: mockSocket,
+      logger: nil
+    )
+
+    let sampleMessage = RealtimeMessageV2(
+      joinRef: "ref1",
+      ref: "ref2",
+      topic: "test:channel",
+      event: "broadcast",
+      payload: ["data": "test"]
+    )
+
+    let push = PushV2(channel: mockChannel, message: sampleMessage)
+
+    let sendTask = Task {
+      await push.send()
+    }
+
+    // Give push time to start waiting
+    try? await Task.sleep(nanoseconds: 10_000_000)  // 10ms
+
+    // First response should be used
+    push.didReceive(status: PushStatus.ok)
+
+    // Subsequent responses should be ignored
+    push.didReceive(status: PushStatus.error)
+    push.didReceive(status: PushStatus.timeout)
+
+    let status = await sendTask.value
+    #expect(status == PushStatus.ok)  // Should be .ok, not .error or .timeout
+  }
+}
+
+// MARK: - Mock Objects
+
+@MainActor
+private final class MockRealtimeChannel: RealtimeChannelProtocol {
+  let topic: String
+  var config: RealtimeChannelConfig
+  let socket: any RealtimeClientProtocol
+  let logger: (any StitchLogger)?
+
+  init(
+    topic: String,
+    config: RealtimeChannelConfig,
+    socket: any RealtimeClientProtocol,
+    logger: (any StitchLogger)?
+  ) {
+    self.topic = topic
+    self.config = config
+    self.socket = socket
+    self.logger = logger
+  }
+}
+
+private final class MockRealtimeClient: RealtimeClientProtocol, @unchecked Sendable {
+  private let _pushedMessages = LockIsolated<[RealtimeMessageV2]>([])
+  private let _status = LockIsolated<RealtimeClientStatus>(.connected)
+  let options: RealtimeClientOptions
+  let http: any HTTPClientType = MockHTTPClient()
+  let clock: any Clock<Duration> = ContinuousClock()
+
+  func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
+    URL(string: "https://test.stitchdb.com/api/broadcast")!
+  }
+
+  var status: RealtimeClientStatus {
+    _status.value
+  }
+
+  init(timeoutInterval: TimeInterval = 10.0) {
+    self.options = RealtimeClientOptions(
+      timeoutInterval: timeoutInterval
+    )
+  }
+
+  var pushedMessages: [RealtimeMessageV2] {
+    _pushedMessages.value
+  }
+
+  func connect() async {
+    _status.setValue(.connected)
+  }
+
+  func push(_ message: RealtimeMessageV2) {
+    _pushedMessages.withValue { messages in
+      messages.append(message)
+    }
+  }
+
+  func _getAccessToken() async -> String? {
+    return nil
+  }
+
+  func makeRef() -> String {
+    return UUID().uuidString
+  }
+
+  func pushBroadcast(
+    joinRef: String?, ref: String?, topic: String, event: String, jsonPayload: JSONObject
+  ) {
+    // No-op for mock
+  }
+
+  func pushBroadcast(
+    joinRef: String?, ref: String?, topic: String, event: String, binaryPayload: Data
+  ) {
+    // No-op for mock
+  }
+
+  func _remove(_ channel: any RealtimeChannelProtocol) {
+    // No-op for mock
+  }
+}
+
+private struct MockHTTPClient: HTTPClientType {
+  func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+    let urlResponse = HTTPURLResponse(
+      url: URL(string: "https://example.com")!,
+      statusCode: 200,
+      httpVersion: nil,
+      headerFields: nil
+    )!
+    return HTTPResponse(data: Data(), response: urlResponse)
+  }
+}

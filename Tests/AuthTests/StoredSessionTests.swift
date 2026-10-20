@@ -1,0 +1,179 @@
+import ConcurrencyExtras
+import Foundation
+import SnapshotTesting
+import TestHelpers
+import Testing
+
+@testable import Auth
+
+#if os(Android)
+  private let isAndroid = true
+#else
+  private let isAndroid = false
+#endif
+
+@Suite
+struct StoredSessionTests {
+  // Unique negative clientID per usage so this suite's process-global `Dependencies` entries can't
+  // be clobbered by another suite running concurrently, nor by this suite's own two tests (which
+  // Swift Testing runs in parallel). `AuthClient`'s generator only hands out positive ids, so
+  // negatives are collision-free.
+  let clientID: AuthClientID = -2
+
+  @Test
+  func get_withCorruptedJSON_returnsNil() throws {
+    let localStorage = InMemoryLocalStorage()
+    try localStorage.store(
+      key: "stitchdb.auth.token",
+      value: Data("not-valid-json".utf8)
+    )
+
+    let testClientID: AuthClientID = -3
+    Dependencies[testClientID] = Dependencies(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "http://localhost")!,
+        storageKey: "stitchdb.auth.token",
+        localStorage: localStorage,
+        logger: nil
+      ),
+      http: HTTPClientMock(),
+      api: .init(clientID: testClientID),
+      codeVerifierStorage: .mock,
+      sessionStorage: .live(clientID: testClientID),
+      sessionManager: .live(clientID: testClientID)
+    )
+
+    let sut = Dependencies[testClientID].sessionStorage
+    #expect(sut.get() == nil)
+  }
+
+  @Test(
+    .disabled(
+      if: isAndroid, "Disabled for android due to #filePath not existing on emulator"
+    )
+  )
+  func storedSession() throws {
+    Dependencies[clientID] = Dependencies(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "http://localhost")!,
+        storageKey: "stitchdb.auth.token",
+        localStorage: try! DiskTestStorage(),
+        logger: nil
+      ),
+      http: HTTPClientMock(),
+      api: .init(clientID: clientID),
+      codeVerifierStorage: .mock,
+      sessionStorage: .live(clientID: clientID),
+      sessionManager: .live(clientID: clientID)
+    )
+
+    let sut = Dependencies[clientID].sessionStorage
+
+    #expect(sut.get() != nil)
+
+    let session = Session(
+      accessToken: "accesstoken",
+      tokenType: "bearer",
+      expiresIn: 120,
+      expiresAt: ISO8601DateFormatter().date(from: "2024-04-01T13:25:07Z")!.timeIntervalSince1970,
+      refreshToken: "refreshtoken",
+      user: User(
+        id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+        appMetadata: [
+          "provider": "email",
+          "providers": [
+            "email"
+          ],
+        ],
+        userMetadata: [
+          "referrer_id": nil
+        ],
+        aud: "authenticated",
+        confirmationSentAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
+        recoverySentAt: nil,
+        emailChangeSentAt: nil,
+        newEmail: nil,
+        invitedAt: nil,
+        actionLink: nil,
+        email: "johndoe@supabsae.com",
+        phone: "",
+        createdAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
+        confirmedAt: nil,
+        emailConfirmedAt: nil,
+        phoneConfirmedAt: nil,
+        lastSignInAt: nil,
+        role: "authenticated",
+        updatedAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
+        identities: [
+          UserIdentity(
+            id: "859f402d-b3de-4105-a1b9-932836d9193b",
+            identityId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+            userId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+            identityData: [
+              "sub": "859f402d-b3de-4105-a1b9-932836d9193b"
+            ],
+            provider: "email",
+            createdAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
+            lastSignInAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
+            updatedAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!
+          )
+        ],
+        factors: nil
+      )
+    )
+
+    sut.store(session)
+    #expect(sut.get() != nil)
+  }
+
+  private final class DiskTestStorage: AuthLocalStorage {
+    let url: URL
+    let storage: LockIsolated<[String: AnyJSON]>
+
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+
+    init() throws {
+      url = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("Resources")
+        .appendingPathComponent("local-storage.json")
+
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+      if !FileManager.default.fileExists(atPath: url.path) {
+        let contents = "{}".data(using: .utf8)
+        FileManager.default.createFile(atPath: url.path, contents: contents)
+      }
+
+      let contents = try Data(contentsOf: url)
+      storage = try LockIsolated(decoder.decode([String: AnyJSON].self, from: contents))
+    }
+
+    func store(key: String, value: Data) throws {
+      let json = try decoder.decode(AnyJSON.self, from: value)
+      storage.withValue {
+        $0[key] = json
+      }
+
+      try saveToDisk()
+    }
+
+    func retrieve(key: String) throws -> Data? {
+      guard let json = storage[key] else { return nil }
+      return try encoder.encode(json)
+    }
+
+    func remove(key: String) throws {
+      storage.withValue {
+        $0[key] = nil
+      }
+      try saveToDisk()
+    }
+
+    private func saveToDisk() throws {
+      let data = try encoder.encode(storage.value)
+      try data.write(to: url)
+    }
+  }
+}

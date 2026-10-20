@@ -1,0 +1,5 @@
+curl \
+	--header "Accept: application/json" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: postgrest-swift/x.y.z" \
+	"https://example.stitchdb.com/users?email=like(all).%7B%25@stitchdb.com,%25@stitchdb.com%7D&select=*"

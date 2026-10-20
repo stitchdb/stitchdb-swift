@@ -1,0 +1,188 @@
+//
+//  SessionStorage.swift
+//
+//
+//  Created by Guilherme Souza on 24/10/23.
+//
+
+import Foundation
+
+struct SessionStorage {
+  var get: @Sendable () -> Session?
+  var store: @Sendable (_ session: Session) -> Void
+  var delete: @Sendable () -> Void
+}
+
+extension SessionStorage {
+  /// Whether storage no longer holds `snapshot`, the session an operation started from — a
+  /// concurrent sign-out cleared it, or another refresh or sign-in replaced it.
+  ///
+  /// Callers use this as a commit guard: a request that outlived the session it was issued for
+  /// must not apply its result to whichever session is stored now. The comparison is between two
+  /// storage reads, not between a caller's input and storage, because a `nil` snapshot is
+  /// legitimate — `setSession(accessToken:refreshToken:)` refreshes an externally-sourced token
+  /// with nothing stored yet, and that is a hydration, not a session replaced underneath.
+  func changed(since snapshot: Session?) -> Bool {
+    guard let snapshot else { return false }
+    guard let current = get() else { return true }
+    return current.refreshToken != snapshot.refreshToken
+  }
+
+  /// Key used to store session on ``AuthLocalStorage``.
+  ///
+  /// It uses value from ``AuthClient/Configuration/storageKey`` or default to `stitchdb.auth.token` if not provided.
+  static func key(_ clientID: AuthClientID) -> String {
+    Dependencies[clientID].configuration.storageKey ?? defaultStorageKey
+  }
+
+  static func live(clientID: AuthClientID) -> SessionStorage {
+    var storage: any AuthLocalStorage {
+      Dependencies[clientID].configuration.localStorage
+    }
+
+    var logger: (any StitchLogger)? {
+      Dependencies[clientID].configuration.logger
+    }
+
+    let migrations: [StorageMigration] = [
+      .legacyKeyPrefix(clientID: clientID),
+      .sessionNewKey(clientID: clientID),
+      .storeSessionDirectly(clientID: clientID),
+      .useDefaultEncoder(clientID: clientID),
+    ]
+
+    var key: String {
+      SessionStorage.key(clientID)
+    }
+
+    return SessionStorage(
+      get: {
+        for migration in migrations {
+          do {
+            try migration.run()
+          } catch {
+            logger?.error(
+              "Storage migration '\(migration.name)' failed: \(error.localizedDescription)"
+            )
+          }
+        }
+
+        do {
+          let storedData = try storage.retrieve(key: key)
+          return try storedData.flatMap {
+            try JSONDecoder().decode(Session.self, from: $0)
+          }
+        } catch {
+          logger?.error("Failed to retrieve session: \(error.localizedDescription)")
+          return nil
+        }
+      },
+      store: { session in
+        do {
+          try storage.store(
+            key: key,
+            value: JSONEncoder().encode(session)
+          )
+        } catch {
+          logger?.error("Failed to store session: \(error.localizedDescription)")
+        }
+      },
+      delete: {
+        do {
+          try storage.remove(key: key)
+        } catch {
+          logger?.error("Failed to delete session: \(error.localizedDescription)")
+        }
+      }
+    )
+  }
+}
+
+struct StorageMigration {
+  var name: String
+  var run: @Sendable () throws -> Void
+}
+
+extension StorageMigration {
+  /// Migrate stored session from `stitchdb.session` key to the custom provided storage key
+  /// or the default `stitchdb.auth.token` key.
+  /// Sessions saved under the key earlier client versions used (`sb-<ref>-auth-token`) move to the current
+  /// key (`stitchdb-<ref>-auth-token`), so nobody is signed out by the upgrade.
+  static func legacyKeyPrefix(clientID: AuthClientID) -> StorageMigration {
+    StorageMigration(name: "legacyKeyPrefix") {
+      let storage = Dependencies[clientID].configuration.localStorage
+      let key = SessionStorage.key(clientID)
+      guard key.hasPrefix("stitchdb-") else { return }
+      let legacy = "sb-" + key.dropFirst("stitchdb-".count)
+      guard let data = try? storage.retrieve(key: legacy) else { return }
+      if (try? storage.retrieve(key: key)) == nil {
+        try storage.store(key: key, value: data)
+      }
+      try? storage.remove(key: legacy)
+    }
+  }
+
+  static func sessionNewKey(clientID: AuthClientID) -> StorageMigration {
+    StorageMigration(name: "sessionNewKey") {
+      let storage = Dependencies[clientID].configuration.localStorage
+      let newKey = SessionStorage.key(clientID)
+
+      if let storedData = try? storage.retrieve(key: "stitchdb.session") {
+        // migrate to new key.
+        try storage.store(key: newKey, value: storedData)
+        try? storage.remove(key: "stitchdb.session")
+      }
+    }
+  }
+
+  /// Migrate the stored session.
+  ///
+  /// Migrate the stored session which used to be stored as:
+  /// ```json
+  /// {
+  ///   "session": <Session>,
+  ///   "expiration_date": <Date>
+  /// }
+  /// ```
+  /// To directly store the `Session` object.
+  static func storeSessionDirectly(clientID: AuthClientID) -> StorageMigration {
+    struct StoredSession: Codable {
+      var session: Session
+      var expirationDate: Date
+    }
+
+    return StorageMigration(name: "storeSessionDirectly") {
+      let storage = Dependencies[clientID].configuration.localStorage
+      let key = SessionStorage.key(clientID)
+
+      if let data = try? storage.retrieve(key: key),
+        let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
+          StoredSession.self,
+          from: data
+        )
+      {
+        let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession.session)
+        try storage.store(key: key, value: session)
+      }
+    }
+  }
+
+  static func useDefaultEncoder(clientID: AuthClientID) -> StorageMigration {
+    StorageMigration(name: "useDefaultEncoder") {
+      let storage = Dependencies[clientID].configuration.localStorage
+      let key = SessionStorage.key(clientID)
+
+      let storedData = try? storage.retrieve(key: key)
+      let sessionUsingOldDecoder = storedData.flatMap {
+        try? AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
+      }
+
+      if let sessionUsingOldDecoder {
+        try storage.store(
+          key: key,
+          value: JSONEncoder().encode(sessionUsingOldDecoder)
+        )
+      }
+    }
+  }
+}

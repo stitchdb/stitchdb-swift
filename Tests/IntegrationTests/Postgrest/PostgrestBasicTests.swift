@@ -1,0 +1,466 @@
+//
+//  PostgrestBasicTests.swift
+//
+//
+//  Created by Guilherme Souza on 06/05/24.
+//
+
+import Foundation
+import InlineSnapshotTesting
+import PostgREST
+import Testing
+
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+struct PostgrestBasicTests {
+  let client = PostgrestClient(
+    configuration: PostgrestClient.Configuration(
+      url: URL(string: "\(DotEnv.STITCHDB_URL)/rest/v1")!,
+      headers: [
+        "apikey": DotEnv.STITCHDB_PUBLISHABLE_KEY
+      ],
+      logger: nil
+    )
+  )
+
+  init() async throws {
+    // Clean up test data before running tests.
+    // Delete users with email (test data), preserving seed data (users with username only).
+    try await client.from("users").delete().not("email", operator: .is, value: AnyJSON.null)
+      .execute()
+    // Delete messages except seed data (id 1 and 2).
+    try await client.from("messages").delete().gt("id", value: 2).execute()
+  }
+
+  @Test
+  func basicSelectTable() async throws {
+    let response =
+      try await client.from("users").select("age_range,catchphrase,data,status,username").execute()
+      .value as AnyJSON
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "age_range" : "[1,2)",
+          "catchphrase" : "'cat' 'fat'",
+          "data" : null,
+          "status" : "ONLINE",
+          "username" : "supabot"
+        },
+        {
+          "age_range" : "[25,35)",
+          "catchphrase" : "'bat' 'cat'",
+          "data" : null,
+          "status" : "OFFLINE",
+          "username" : "kiwicopple"
+        },
+        {
+          "age_range" : "[25,35)",
+          "catchphrase" : "'bat' 'rat'",
+          "data" : null,
+          "status" : "ONLINE",
+          "username" : "awailas"
+        },
+        {
+          "age_range" : "[20,30)",
+          "catchphrase" : "'fat' 'rat'",
+          "data" : null,
+          "status" : "ONLINE",
+          "username" : "dragarcia"
+        }
+      ]
+      """
+    }
+  }
+
+  @Test
+  func basicSelectView() async throws {
+    let response = try await client.from("updatable_view").select().execute().value as AnyJSON
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "non_updatable_column" : 1,
+          "username" : "supabot"
+        },
+        {
+          "non_updatable_column" : 1,
+          "username" : "kiwicopple"
+        },
+        {
+          "non_updatable_column" : 1,
+          "username" : "awailas"
+        },
+        {
+          "non_updatable_column" : 1,
+          "username" : "dragarcia"
+        }
+      ]
+      """
+    }
+  }
+
+  @Test
+  func rpc() async throws {
+    let response =
+      try await client.rpc("get_status", params: ["name_param": "supabot"]).execute().value
+      as AnyJSON
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      "ONLINE"
+      """
+    }
+  }
+
+  @Test
+  func rPCReturnsVoid() async throws {
+    let response = try await client.rpc("void_func").execute().data
+    #expect(response == Data())
+  }
+
+  @Test
+  func ignoreDuplicates_upsert() async throws {
+    let response =
+      try await client.from("users")
+      .upsert(["username": "dragarcia"], onConflict: "username", ignoreDuplicates: true)
+      .select().execute().value as AnyJSON
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+
+      ]
+      """
+    }
+  }
+
+  @Test
+  func basicInsertUpdateAndDelete() async throws {
+    // Basic insert
+    var response =
+      try await client.from("messages")
+      .insert(AnyJSON.object(["message": "foo", "username": "supabot", "channel_id": 1]))
+      .select("channel_id,data,message,username")
+      .execute()
+      .value as AnyJSON
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "Hello World 👋",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    // Upsert
+
+    response =
+      try await client.from("messages")
+      .upsert(
+        AnyJSON.object(
+          [
+            "id": 1000,
+            "message": "foo",
+            "username": "supabot",
+            "channel_id": 2,
+          ]
+        )
+      )
+      .select("channel_id,data,message,username")
+      .execute()
+      .value as AnyJSON
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "Hello World 👋",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    // Bulk insert
+
+    response = try await client.from("messages")
+      .insert(
+        AnyJSON.array([
+          ["message": "foo", "username": "supabot", "channel_id": 1],
+          ["message": "foo", "username": "supabot", "channel_id": 1],
+        ])
+      )
+      .select("channel_id,data,message,username")
+      .execute()
+      .value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "Hello World 👋",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    // Basic update
+    response = try await client.from("messages")
+      .update(["channel_id": 2])
+      .eq("message", value: "foo")
+      .select("channel_id,data,message,username")
+      .execute()
+      .value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    response = try await client.from("messages").select("channel_id,data,message,username")
+      .execute().value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "message" : "Hello World 👋",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    // Basic delete
+    response = try await client.from("messages")
+      .delete()
+      .eq("message", value: "foo")
+      .select("channel_id,data,message,username")
+      .execute()
+      .value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "message" : "foo",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+
+    response = try await client.from("messages").select().execute().value
+    assertInlineSnapshot(of: response, as: .json) {
+      """
+      [
+        {
+          "channel_id" : 1,
+          "data" : null,
+          "id" : 1,
+          "message" : "Hello World 👋",
+          "username" : "supabot"
+        },
+        {
+          "channel_id" : 2,
+          "data" : null,
+          "id" : 2,
+          "message" : "Perfection is attained, not when there is nothing more to add, but when there is nothing left to take away.",
+          "username" : "supabot"
+        }
+      ]
+      """
+    }
+  }
+}

@@ -1,0 +1,374 @@
+import ConcurrencyExtras
+import CustomDump
+import Foundation
+import HTTPTypes
+import InlineSnapshotTesting
+import SnapshotTestingCustomDump
+import Testing
+
+@testable import Auth
+@testable import Functions
+@testable import Realtime
+@testable import RealtimeV2
+@testable import StitchDB
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+/// Captures every request handed to it and responds with an empty JSON array.
+/// `startLoading` runs on the `URLSession` delegate queue, so mutable state is lock-guarded.
+///
+/// Shared with `TracingTests`, which needs it to assert on `traceparent` header injection.
+final class RequestCapturingProtocol: URLProtocol {
+  private static let storage = LockIsolated<[URLRequest]>([])
+
+  static var capturedRequests: [URLRequest] {
+    get { storage.value }
+    set { storage.setValue(newValue) }
+  }
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    Self.capturedRequests.append(request)
+    let response = HTTPURLResponse(
+      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
+    )!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data("[]".utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
+func makeMockSession() -> URLSession {
+  let config = URLSessionConfiguration.ephemeral
+  config.protocolClasses = [RequestCapturingProtocol.self]
+  return URLSession(configuration: config)
+}
+
+final class AuthLocalStorageMock: AuthLocalStorage {
+  func store(key _: String, value _: Data) throws {}
+
+  func retrieve(key _: String) throws -> Data? {
+    nil
+  }
+
+  func remove(key _: String) throws {}
+}
+
+@Suite
+struct StitchClientTests {
+  @Test
+  func clientInitialization() async {
+    final class Logger: StitchLogger {
+      func log(message _: StitchLogMessage) {
+        // no-op
+      }
+    }
+
+    let logger = Logger()
+    let customSchema = "custom_schema"
+    let localStorage = AuthLocalStorageMock()
+    let customHeaders = ["header_field": "header_value"]
+
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "PUBLISHABLE_KEY",
+      options: StitchClientOptions(
+        db: StitchClientOptions.DatabaseOptions(schema: customSchema),
+        auth: StitchClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: StitchClientOptions.GlobalOptions(
+          headers: customHeaders,
+          session: .shared,
+          logger: logger
+        ),
+        functions: StitchClientOptions.FunctionsOptions(
+          region: .apNortheast1
+        ),
+        realtime: RealtimeClientOptions(
+          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
+        )
+      )
+    )
+
+    #expect(client.stitchURL.absoluteString == "https://project-ref.stitchdb.com")
+    #expect(client.stitchKey == "PUBLISHABLE_KEY")
+    #expect(client.storageURL.absoluteString == "https://project-ref.stitchdb.com/storage/v1")
+    #expect(client.databaseURL.absoluteString == "https://project-ref.stitchdb.com/rest/v1")
+    #expect(
+      client.functionsURL.absoluteString
+        == "https://project-ref.stitchdb.com/functions/v1"
+    )
+
+    assertInlineSnapshot(of: client.headers, as: .customDump) {
+      """
+      [
+        "Apikey": "PUBLISHABLE_KEY",
+        "Authorization": "Bearer PUBLISHABLE_KEY",
+        "X-Client-Info": "stitchdb-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0",
+        "header_field": "header_value"
+      ]
+      """
+    }
+    expectNoDifference(client.headers, client.auth.configuration.headers)
+    expectNoDifference(client.headers, client.functions.headers.dictionary)
+    expectNoDifference(client.headers, client.storage.configuration.headers)
+    expectNoDifference(client.headers, client.rest.configuration.headers)
+
+    #expect(client.functions.region == "ap-northeast-1")
+
+    let realtimeURL = client.realtimeV2.url
+    #expect(realtimeURL.absoluteString == "https://project-ref.stitchdb.com/realtime/v1")
+
+    let realtimeOptions = client.realtimeV2.options
+    let expectedRealtimeHeader = client._headers.merging(with: [
+      .init("custom_realtime_header_key")!: "custom_realtime_header_value"
+    ]
+    )
+    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    #expect(realtimeOptions.logger as? Logger === logger)
+
+    #expect(!client.auth.configuration.autoRefreshToken)
+    #expect(client.auth.configuration.storageKey == "stitchdb-project-ref-auth-token")
+
+    #expect(
+      client.mutableState.listenForAuthEventsTask != nil,
+      "should listen for internal auth events"
+    )
+  }
+
+  #if !os(Linux) && !os(Android)
+    @Test
+    func clientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
+      _ = StitchClient(
+        stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+        stitchKey: "PUBLISHABLE_KEY"
+      )
+    }
+  #endif
+
+  @Test
+  func customSessionPropagatedToRealtimeClient() {
+    let localStorage = AuthLocalStorageMock()
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "PUBLISHABLE_KEY",
+      options: StitchClientOptions(
+        auth: StitchClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: StitchClientOptions.GlobalOptions(session: .shared)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.fetch != nil,
+      "global URLSession should be propagated to Realtime client as a fetch closure"
+    )
+  }
+
+  @Test
+  func userProvidedRealtimeFetchIsNotOverridden() {
+    let localStorage = AuthLocalStorageMock()
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "PUBLISHABLE_KEY",
+      options: StitchClientOptions(
+        auth: StitchClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        realtime: RealtimeClientOptions(
+          fetch: { _ in throw URLError(.cancelled) }
+        )
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.fetch != nil,
+      "user-provided realtime fetch should be preserved"
+    )
+  }
+
+  @Test
+  func globalSessionPropagatedToRealtimeWebSocket() {
+    let localStorage = AuthLocalStorageMock()
+    let customSession = URLSession(configuration: .ephemeral)
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "PUBLISHABLE_KEY",
+      options: StitchClientOptions(
+        auth: StitchClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: StitchClientOptions.GlobalOptions(session: customSession)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.session === customSession,
+      "global URLSession should be propagated to Realtime's WebSocket transport for certificate pinning"
+    )
+  }
+
+  @Test
+  func userProvidedRealtimeSessionIsNotOverridden() {
+    let localStorage = AuthLocalStorageMock()
+    let globalSession = URLSession(configuration: .ephemeral)
+    let realtimeSpecificSession = URLSession(configuration: .default)
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "PUBLISHABLE_KEY",
+      options: StitchClientOptions(
+        auth: StitchClientOptions.AuthOptions(
+          storage: localStorage,
+          autoRefreshToken: false
+        ),
+        global: StitchClientOptions.GlobalOptions(session: globalSession),
+        realtime: RealtimeClientOptions(session: realtimeSpecificSession)
+      )
+    )
+
+    #expect(
+      client.realtimeV2.options.session === realtimeSpecificSession,
+      "user-provided realtime session should be preserved"
+    )
+  }
+
+  @Test
+  func clientInitWithCustomAccessToken() async {
+    let localStorage = AuthLocalStorageMock()
+
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "PUBLISHABLE_KEY",
+      options: .init(
+        auth: .init(
+          storage: localStorage,
+          accessToken: { "jwt" }
+        )
+      )
+    )
+
+    #expect(
+      client.mutableState.listenForAuthEventsTask == nil,
+      "should not listen for internal auth events when using 3p authentication"
+    )
+
+    // Not asserting that `client.auth` reports an issue here (as the XCTest version of this
+    // test did via `withExpectedIssue`/`withKnownIssue`): under Xcode 26's Swift Testing +
+    // XCTest bundle hosting, `reportIssue` (xctest-dynamic-overlay) segfaults the test process
+    // when called from a `@Test` function, regardless of which "expected/known issue" wrapper
+    // is used. Reproduced locally via `xcodebuild test`; does not reproduce under `swift test`.
+    // Tracked as a migration-wide risk in SDK-435 for any later phase whose tests exercise
+    // `reportIssue`-instrumented production code.
+  }
+
+  @Test
+  func listenForAuthEventsTaskDoesNotRetainClient() async {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: StitchClient?
+    }
+    let box = WeakBox()
+
+    // Narrow scope so ARC drops the last strong reference when it returns.
+    func scope() {
+      let client = StitchClient(
+        stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+        stitchKey: "PUBLISHABLE_KEY",
+        options: StitchClientOptions(
+          auth: StitchClientOptions.AuthOptions(
+            storage: AuthLocalStorageMock(),
+            autoRefreshToken: false
+          )
+        )
+      )
+      box.client = client
+
+      #expect(
+        client.mutableState.listenForAuthEventsTask != nil,
+        "test precondition: client should be listening for internal auth events"
+      )
+    }
+    scope()
+
+    // Let the auth-state-change plumbing drain before asserting.
+    await Task.megaYield()
+
+    #expect(
+      box.client == nil,
+      "StitchClient leaked: the listenForAuthEvents task retained self, preventing deinit."
+    )
+  }
+
+  @Test
+  func subClientsDoNotRetainClient() async {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: StitchClient?
+    }
+    let box = WeakBox()
+
+    // Narrow scope so ARC drops the last strong reference when it returns.
+    func scope() {
+      let client = StitchClient(
+        stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+        stitchKey: "PUBLISHABLE_KEY",
+        options: StitchClientOptions(
+          auth: StitchClientOptions.AuthOptions(
+            storage: AuthLocalStorageMock(),
+            autoRefreshToken: false
+          )
+        )
+      )
+      box.client = client
+
+      // Materialize every lazily-built sub-client: each one caches the `fetch`/`upload` closures
+      // in `mutableState`, so a `self` capture there would form a retain cycle.
+      _ = client.rest
+      _ = client.storage
+      _ = client.functions
+      _ = client.realtimeV2
+    }
+    scope()
+
+    await Task.megaYield()
+
+    #expect(
+      box.client == nil,
+      "StitchClient leaked: a cached sub-client retained self, preventing deinit."
+    )
+  }
+
+  @Test
+  func functionsOmitsAuthorizationBearerForNewFormatKey() {
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "sb_publishable_abc123",
+      options: StitchClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    #expect(client.functions.headers.dictionary["Authorization"] == nil)
+    #expect(client.functions.headers.dictionary["Apikey"] == "sb_publishable_abc123")
+  }
+
+  @Test
+  func functionsKeepsAuthorizationBearerForLegacyKey() {
+    let client = StitchClient(
+      stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
+      stitchKey: "legacy-jwt-key",
+      options: StitchClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+    )
+
+    #expect(client.functions.headers.dictionary["Authorization"] == "Bearer legacy-jwt-key")
+    #expect(client.functions.headers.dictionary["Apikey"] == "legacy-jwt-key")
+  }
+}
