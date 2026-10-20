@@ -45,7 +45,7 @@ extension StorageMockerTests {
           url: url,
           headers: [
             "apikey":
-              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo"
           ],
           session: StorageHTTPSession(
             fetch: { try await session.data(for: $0) },
@@ -140,7 +140,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/storage/v1/bucket/bucket123"
         """#
       }
@@ -179,7 +179,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/storage/v1/bucket"
         """#
       }
@@ -219,7 +219,7 @@ extension StorageMockerTests {
         	--header "Content-Length: 51" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":true}" \
         	"http://localhost:54321/storage/v1/bucket"
         """#
@@ -262,7 +262,7 @@ extension StorageMockerTests {
         	--header "Content-Length: 51" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"id\":\"bucket123\",\"name\":\"bucket123\",\"public\":true}" \
         	"http://localhost:54321/storage/v1/bucket/bucket123"
         """#
@@ -292,7 +292,7 @@ extension StorageMockerTests {
         curl \
         	--request DELETE \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/storage/v1/bucket/bucket123"
         """#
       }
@@ -317,7 +317,7 @@ extension StorageMockerTests {
         curl \
         	--request POST \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/storage/v1/bucket/bucket123/empty"
         """#
       }
@@ -355,7 +355,7 @@ extension StorageMockerTests {
         	--header "Content-Length: 79" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"file_size_limit\":10485760,\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
         	"http://localhost:54321/storage/v1/bucket"
         """#
@@ -397,7 +397,7 @@ extension StorageMockerTests {
         	--header "Content-Length: 76" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: storage-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"file_size_limit\":\"1mb\",\"id\":\"newbucket\",\"name\":\"newbucket\",\"public\":false}" \
         	"http://localhost:54321/storage/v1/bucket"
         """#

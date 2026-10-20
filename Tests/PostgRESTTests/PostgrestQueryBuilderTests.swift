@@ -53,7 +53,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/rest/v1/users?select=*"
         """#
       }
@@ -86,7 +86,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/rest/v1/users?select=somecolumn"
         """#
       }
@@ -114,7 +114,7 @@ extension PostgrestMockerTests {
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/rest/v1/users?select=some%22column%22"
         """#
       }
@@ -147,7 +147,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: count=exact" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/rest/v1/users?select=*"
         """#
       }
@@ -184,7 +184,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: existing=value,count=exact" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/rest/v1/users?select=*"
         """#
       }
@@ -220,7 +220,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: return=minimal,count=estimated" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "[{\"id\":1,\"username\":\"stitchdb\"},{\"id\":1,\"username\":\"supa\"}]" \
         	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22"
         """#
@@ -259,7 +259,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: return=minimal" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "[{\"a,b\":1}]" \
         	"http://localhost:54321/rest/v1/users?columns=%22a,b%22"
         """#
@@ -290,7 +290,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: existing=value,return=minimal" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"id\":1,\"username\":\"stitchdb\"}" \
         	"http://localhost:54321/rest/v1/users"
         """#
@@ -323,7 +323,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: existing=value,return=minimal,count=planned" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"username\":\"stitch2\"}" \
         	"http://localhost:54321/rest/v1/users?id=eq.1"
         """#
@@ -357,7 +357,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: existing=value,resolution=merge-duplicates,return=minimal,count=estimated" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"stitchdb\"}]" \
         	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22&on_conflict=username"
         """#
@@ -398,7 +398,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: resolution=ignore-duplicates,return=representation" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	--data "{\"id\":1,\"username\":\"admin\"}" \
         	"http://localhost:54321/rest/v1/users"
         """#
@@ -429,7 +429,7 @@ extension PostgrestMockerTests {
         	--header "Content-Type: application/json" \
         	--header "Prefer: existing=value,return=representation,count=estimated" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGl0Y2hkYi1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.30k-T-w6MlWAwrHo1aRk8_7MaPM-m08Yj65j8D3qnmo" \
         	"http://localhost:54321/rest/v1/users?username=eq.stitchdb"
         """#
       }

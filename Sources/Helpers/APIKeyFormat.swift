@@ -10,14 +10,14 @@ import IssueReporting
 
 /// Classifies and validates the format of a StitchDB API key.
 ///
-/// New-format keys (`sb_publishable_…` / `sb_secret_…`) are not JWTs and must never be sent
+/// New-format keys (`sdb_publishable_…` / `sdb_secret_…`) are not JWTs and must never be sent
 /// as a Bearer token — they belong only in the `apikey` header. Legacy JWT keys (no `sb_`
 /// prefix) and platform-issued temporary keys (`sb_temp_…`) keep the existing Bearer fallback.
 package enum APIKeyFormat {
-  private static let newFormatPrefixes = ["sb_publishable_", "sb_secret_"]
+  private static let newFormatPrefixes = ["sdb_publishable_", "sdb_secret_"]
   private static let temporaryKeyPrefix = "sb_temp_"
 
-  /// Whether `key` is a new-format key (`sb_publishable_…` / `sb_secret_…`).
+  /// Whether `key` is a new-format key (`sdb_publishable_…` / `sdb_secret_…`).
   package static func isNew(_ key: String) -> Bool {
     newFormatPrefixes.contains { key.hasPrefix($0) }
   }

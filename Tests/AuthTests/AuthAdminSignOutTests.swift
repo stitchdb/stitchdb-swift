@@ -58,7 +58,7 @@ extension AuthMockerTests {
         	--request POST \
         	--header "Authorization: Bearer users.access.token" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/logout?scope=global"
         """#
@@ -84,7 +84,7 @@ extension AuthMockerTests {
         	--request POST \
         	--header "Authorization: Bearer users.access.token" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/logout?scope=local"
         """#
@@ -110,7 +110,7 @@ extension AuthMockerTests {
         	--request POST \
         	--header "Authorization: Bearer users.access.token" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/logout?scope=others"
         """#

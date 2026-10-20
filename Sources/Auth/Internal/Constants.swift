@@ -17,7 +17,7 @@ let autoRefreshTickThreshold = 3
 let defaultStorageKey = "stitchdb.auth.token"
 
 extension HTTPField.Name {
-  static let apiVersionHeaderName = HTTPField.Name("X-Supabase-Api-Version")!
+  static let apiVersionHeaderName = HTTPField.Name("X-Stitch-Api-Version")!
 }
 
 let apiVersions: [APIVersion.Name: APIVersion] = [

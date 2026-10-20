@@ -4,8 +4,8 @@ import Testing
 @Suite
 struct APIKeyFormatTests {
   @Test(arguments: [
-    "sb_publishable_abc123",
-    "sb_secret_abc123",
+    "sdb_publishable_abc123",
+    "sdb_secret_abc123",
   ])
   func isNewRecognizesNewFormatKeys(key: String) {
     #expect(APIKeyFormat.isNew(key))
@@ -23,8 +23,8 @@ struct APIKeyFormatTests {
 
   @Test
   func shouldWarnAcceptsRecognizedAndLegacyKeysSilently() {
-    #expect(!APIKeyFormat.shouldWarn(for: "sb_publishable_shouldwarn1"))
-    #expect(!APIKeyFormat.shouldWarn(for: "sb_secret_shouldwarn1"))
+    #expect(!APIKeyFormat.shouldWarn(for: "sdb_publishable_shouldwarn1"))
+    #expect(!APIKeyFormat.shouldWarn(for: "sdb_secret_shouldwarn1"))
     #expect(!APIKeyFormat.shouldWarn(for: "sb_temp_shouldwarn1_payload"))
     #expect(!APIKeyFormat.shouldWarn(for: "header.payload.signature"))
     #expect(!APIKeyFormat.shouldWarn(for: "anon-key"))
@@ -57,8 +57,8 @@ struct APIKeyFormatTests {
     // no-session + new-key: accessToken fallback equals the raw new-format key -> suppressed.
     #expect(
       APIKeyFormat.functionsBearerToken(
-        accessToken: "sb_publishable_abc123",
-        stitchKey: "sb_publishable_abc123"
+        accessToken: "sdb_publishable_abc123",
+        stitchKey: "sdb_publishable_abc123"
       ) == nil
     )
   }
@@ -79,7 +79,7 @@ struct APIKeyFormatTests {
     #expect(
       APIKeyFormat.functionsBearerToken(
         accessToken: "real.session.jwt",
-        stitchKey: "sb_publishable_abc123"
+        stitchKey: "sdb_publishable_abc123"
       ) == "real.session.jwt"
     )
   }

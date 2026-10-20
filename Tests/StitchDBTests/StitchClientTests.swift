@@ -352,12 +352,12 @@ struct StitchClientTests {
   func functionsOmitsAuthorizationBearerForNewFormatKey() {
     let client = StitchClient(
       stitchURL: URL(string: "https://project-ref.stitchdb.com")!,
-      stitchKey: "sb_publishable_abc123",
+      stitchKey: "sdb_publishable_abc123",
       options: StitchClientOptions(auth: .init(storage: AuthLocalStorageMock()))
     )
 
     #expect(client.functions.headers.dictionary["Authorization"] == nil)
-    #expect(client.functions.headers.dictionary["Apikey"] == "sb_publishable_abc123")
+    #expect(client.functions.headers.dictionary["Apikey"] == "sdb_publishable_abc123")
   }
 
   @Test

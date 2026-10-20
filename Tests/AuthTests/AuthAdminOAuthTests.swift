@@ -94,7 +94,7 @@ extension AuthMockerTests {
         curl \
         	--header "Authorization: Bearer stitchdb.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients?page=&per_page="
         """#
@@ -144,7 +144,7 @@ extension AuthMockerTests {
         	--header "Content-Length: 141" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	--data "{\"client_name\":\"Update Client name\",\"grant_types\":[\"authorization_code\",\"refresh_token\"],\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
@@ -200,7 +200,7 @@ extension AuthMockerTests {
         	--header "Content-Length: 80" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	--data "{\"client_name\":\"New Client\",\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients"
@@ -249,7 +249,7 @@ extension AuthMockerTests {
         curl \
         	--header "Authorization: Bearer stitchdb.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
         """#
@@ -277,7 +277,7 @@ extension AuthMockerTests {
         	--request DELETE \
         	--header "Authorization: Bearer stitchdb.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
         """#
@@ -318,7 +318,7 @@ extension AuthMockerTests {
         	--request POST \
         	--header "Authorization: Bearer stitchdb.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/regenerate_secret"
         """#

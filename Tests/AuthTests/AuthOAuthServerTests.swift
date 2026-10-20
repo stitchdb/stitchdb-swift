@@ -237,7 +237,7 @@ extension AuthMockerTests {
         curl \
         	--header "Authorization: Bearer accesstoken" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456"
         """#
@@ -317,7 +317,7 @@ extension AuthMockerTests {
         	--header "Content-Length: 20" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	--data "{\"action\":\"approve\"}" \
         	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456/consent"
@@ -356,7 +356,7 @@ extension AuthMockerTests {
         	--header "Content-Length: 17" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	--data "{\"action\":\"deny\"}" \
         	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456/consent"
@@ -403,7 +403,7 @@ extension AuthMockerTests {
         curl \
         	--header "Authorization: Bearer accesstoken" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/user/oauth/grants"
         """#
@@ -436,7 +436,7 @@ extension AuthMockerTests {
         	--request DELETE \
         	--header "Authorization: Bearer accesstoken" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
+        	--header "X-Stitch-Api-Version: 2024-01-01" \
         	--header "apikey: stitchdb.publishable.key" \
         	"http://localhost:54321/auth/v1/user/oauth/grants?client_id=E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
         """#

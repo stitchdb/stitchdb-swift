@@ -215,7 +215,7 @@ struct SessionManagerTests {
       .stub(
         #"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#,
         code: 400,
-        headers: ["X-Supabase-Api-Version": "2024-01-01"]
+        headers: ["X-Stitch-Api-Version": "2024-01-01"]
       )
     }
     let (events, stopCollecting) = collectAuthEvents()
