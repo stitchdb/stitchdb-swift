@@ -15,7 +15,8 @@ import Testing
 #endif
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
-final class StorageFileIntegrationTests {
+// Swift Testing makes a fresh instance per test, so nothing is shared across tasks.
+final class StorageFileIntegrationTests: @unchecked Sendable {
   let storage = StitchStorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.STITCHDB_URL)/storage/v1")!,
