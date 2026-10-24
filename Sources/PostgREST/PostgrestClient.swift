@@ -14,7 +14,7 @@ public import HTTPTypes
 ///
 /// ```swift
 /// let client = PostgrestClient(
-///   url: URL(string: "https://<project>.stitchdb.com/rest/v1")!,
+///   url: URL(string: "https://<project-ref>.p.stitchdb.com/rest/v1")!,
 ///   headers: ["apikey": "<anon-key>"]
 /// )
 ///

@@ -69,7 +69,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 ///
 /// ```swift
 /// let auth = AuthClient(
-///   url: URL(string: "https://<project>.stitchdb.com/auth/v1")!,
+///   url: URL(string: "https://<project-ref>.p.stitchdb.com/auth/v1")!,
 ///   headers: ["apikey": "<anon-key>"],
 ///   localStorage: KeychainLocalStorage()
 /// )

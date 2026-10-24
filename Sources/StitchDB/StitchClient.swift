@@ -13,7 +13,7 @@ import IssueReporting
 ///
 /// ```swift
 /// let stitchdb = StitchClient(
-///   stitchURL: URL(string: "https://your-project.stitchdb.com")!,
+///   stitchURL: URL(string: "https://<project-ref>.p.stitchdb.com")!,
 ///   stitchKey: "your-anon-key"
 /// )
 /// ```

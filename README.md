@@ -9,7 +9,7 @@ Swift Package Manager:
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/stitchdb/stitchdb-swift.git", from: "1.0.0")
+  .package(url: "https://github.com/stitchdb/stitchdb-swift.git", branch: "main")
 ],
 targets: [
   .target(name: "YourApp", dependencies: [.product(name: "StitchDB", package: "stitchdb-swift")])
@@ -24,7 +24,7 @@ Or in Xcode: **File → Add Package Dependencies…** and paste `https://github.
 import StitchDB
 
 let client = StitchClient(
-  stitchURL: URL(string: "https://<project-ref>.stitchdb.com")!,
+  stitchURL: URL(string: "https://<project-ref>.p.stitchdb.com")!,
   stitchKey: "<anon-key>"
 )
 

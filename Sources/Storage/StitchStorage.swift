@@ -7,7 +7,7 @@ public import Foundation
 ///
 /// ```swift
 /// let configuration = StorageClientConfiguration(
-///   url: URL(string: "https://project.stitchdb.com/storage/v1")!,
+///   url: URL(string: "https://<project-ref>.p.stitchdb.com/storage/v1")!,
 ///   headers: ["Authorization": "Bearer \(accessToken)"]
 /// )
 /// let storage = StitchStorageClient(configuration: configuration)
@@ -29,7 +29,7 @@ public import Foundation
 /// - ``logger``
 /// - ``useNewHostname``
 public struct StorageClientConfiguration: Sendable {
-  /// The base URL of the Storage API endpoint (e.g. `https://project.stitchdb.com/storage/v1`).
+  /// The base URL of the Storage API endpoint (e.g. `https://<project-ref>.p.stitchdb.com/storage/v1`).
   public var url: URL
 
   /// HTTP headers sent with every request, such as the `Authorization` header.

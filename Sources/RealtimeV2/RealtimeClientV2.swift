@@ -47,7 +47,7 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 ///
 /// ```swift
 /// let client = RealtimeClientV2(
-///   url: URL(string: "https://<project>.stitchdb.com/realtime/v1")!,
+///   url: URL(string: "https://<project-ref>.p.stitchdb.com/realtime/v1")!,
 ///   options: RealtimeClientOptions(accessToken: { session.accessToken })
 /// )
 ///
@@ -142,7 +142,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Creates a new ``RealtimeClientV2`` using the default URLSession WebSocket transport.
   ///
   /// - Parameters:
-  ///   - url: The Realtime server URL (e.g. `https://<project>.stitchdb.com/realtime/v1`).
+  ///   - url: The Realtime server URL (e.g. `https://<project-ref>.p.stitchdb.com/realtime/v1`).
   ///   - options: Configuration options for the client.
   public convenience init(url: URL, options: RealtimeClientOptions) {
     self.init(url: url, options: options, clock: ContinuousClock())
