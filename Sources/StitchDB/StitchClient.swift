@@ -427,7 +427,7 @@ public final class StitchClient: Sendable {
   /// closure for its whole lifetime while being cached in ``mutableState``. Capturing `self` here
   /// would form a `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps
   /// ``deinit`` from ever running.
-  private var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
+  var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
     { [session = options.global.session, adapt = adaptRequest] request in
       try await session.data(for: adapt(request))
     }

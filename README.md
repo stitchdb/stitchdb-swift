@@ -51,6 +51,33 @@ let hello: Hello = try await client.functions.invoke("hello-world", options: .in
 
 Find the project URL and anon key in the dashboard under **Settings → API keys**.
 
+## Offline sync
+
+Keep a local copy of the tables that sync (Studio › Database › Offline sync). Reads come from the local copy, writes
+apply locally at once and are queued; the queue is pushed and changes are pulled whenever the server can be reached
+(every 30 s by default, and after each write).
+
+```swift
+let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+  .appendingPathComponent("offline-\(userID)")
+let offline = client.offline(tables: ["todos"], store: FileOfflineStore(directory: dir))
+try await offline.ready()
+
+try await offline.table("todos").upsert(["id": .string(UUID().uuidString), "title": "Milk"])
+let open = await offline.table("todos").where { $0["done"] != true }
+
+Task { for await rows in offline.table("todos").rowUpdates() { render(rows) } }
+Task { for await c in offline.conflicts() { print("\(c.table): server kept", c.server ?? [:]) } }
+
+try await offline.sync()             // push now, pull until up to date
+print(await offline.status.pending)  // writes not pushed yet
+try await offline.close(clear: true) // on sign-out: stop and delete the local copy
+```
+
+A local write wins over pulled changes until it is pushed. If the server keeps its own row (`conflict`) or refuses the
+write (`rejected`), the local copy takes the server's row and `conflicts()` gets an event. `MemoryOfflineStore` (the
+default) keeps nothing across launches; implement `OfflineStore` for your own storage.
+
 Documentation: https://stitchdb.com/docs/sdk/swift
 
 ## License
