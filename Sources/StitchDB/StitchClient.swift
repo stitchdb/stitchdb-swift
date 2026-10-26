@@ -167,6 +167,10 @@ public final class StitchClient: Sendable {
     }
   }
 
+  /// Crash and error reporting: uncaught exceptions and the errors you report, with breadcrumbs of the last API
+  /// calls. Nothing is captured or sent before ``CrashesClient/start(release:environment:captureUnhandled:maxBreadcrumbs:directory:beforeSend:)``.
+  public let crashes: CrashesClient
+
   let _headers: HTTPFields
   /// The HTTP headers included in every request made by sub-clients.
   ///
@@ -256,6 +260,13 @@ public final class StitchClient: Sendable {
     }
     let defaultStorageKey = "stitchdb-\(host.split(separator: ".")[0])-auth-token"
 
+    let crashes = CrashesClient(
+      url: stitchURL.appendingPathComponent("/crashes/v1"),
+      headers: _headers.dictionary,
+      directory: Self.crashesDirectory(for: stitchURL)
+    )
+    self.crashes = crashes
+
     _auth = AuthClient(
       url: stitchURL.appendingPathComponent("/auth/v1"),
       headers: _headers.dictionary,
@@ -266,9 +277,11 @@ public final class StitchClient: Sendable {
       logger: options.global.logger,
       encoder: options.auth.encoder,
       decoder: options.auth.decoder,
-      fetch: {
+      fetch: { request in
         // DON'T use `fetchWithAuth` method within the AuthClient as it may cause a deadlock.
-        try await options.global.session.data(for: TraceContext.inject(into: $0))
+        try await crashes.recording(request) {
+          try await options.global.session.data(for: TraceContext.inject(into: request))
+        }
       },
       autoRefreshToken: options.auth.autoRefreshToken,
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
@@ -281,6 +294,10 @@ public final class StitchClient: Sendable {
         params: _headers.dictionary
       )
     )
+
+    crashes.setFetch { [session = options.global.session, adapt = adaptRequest] request in
+      try await session.data(for: adapt(request))
+    }
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()
@@ -428,8 +445,8 @@ public final class StitchClient: Sendable {
   /// would form a `self -> mutableState -> sub-client -> closure -> self` retain cycle that keeps
   /// ``deinit`` from ever running.
   var fetchWithAuth: @Sendable (_ request: URLRequest) async throws -> (Data, URLResponse) {
-    { [session = options.global.session, adapt = adaptRequest] request in
-      try await session.data(for: adapt(request))
+    { [session = options.global.session, adapt = adaptRequest, crashes] request in
+      try await crashes.recording(request) { try await session.data(for: adapt(request)) }
     }
   }
 
@@ -439,8 +456,8 @@ public final class StitchClient: Sendable {
   private var uploadWithAuth:
     @Sendable (_ request: URLRequest, _ data: Data) async throws -> (Data, URLResponse)
   {
-    { [session = options.global.session, adapt = adaptRequest] request, data in
-      try await session.upload(for: adapt(request), from: data)
+    { [session = options.global.session, adapt = adaptRequest, crashes] request, data in
+      try await crashes.recording(request) { try await session.upload(for: adapt(request), from: data) }
     }
   }
 
@@ -529,8 +546,8 @@ public final class StitchClient: Sendable {
     }
 
     if realtimeOptions.fetch == nil {
-      realtimeOptions.fetch = { [session = options.global.session] request in
-        try await session.data(for: TraceContext.inject(into: request))
+      realtimeOptions.fetch = { [session = options.global.session, crashes] request in
+        try await crashes.recording(request) { try await session.data(for: TraceContext.inject(into: request)) }
       }
     }
 

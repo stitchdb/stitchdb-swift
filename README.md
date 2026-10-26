@@ -78,6 +78,35 @@ A local write wins over pulled changes until it is pushed. If the server keeps i
 write (`rejected`), the local copy takes the server's row and `conflicts()` gets an event. `MemoryOfflineStore` (the
 default) keeps nothing across launches; implement `OfflineStore` for your own storage.
 
+## Crash reporting
+
+Uncaught exceptions and the errors you report, grouped into issues in Studio › Crashes with the stack, app version,
+device, the signed-in user and the last breadcrumbs, including the SDK's own API calls
+(`GET /rest/v1/orders?select&id 500`: method, path, query keys without values, status, error code).
+
+```swift
+client.crashes.start(release: "1.4.0")   // nothing is captured, recorded or sent before start()
+
+do { try await checkout() } catch {
+  client.crashes.captureError(error, context: ["step": "payment"])
+}
+client.crashes.captureMessage("cart is empty after payment")
+client.crashes.addBreadcrumb(type: "ui", message: "tapped Checkout")
+
+// consent or filtering: return nil to drop a report
+client.crashes.start(release: "1.4.0") { report in userAgreed ? report : nil }
+
+await client.crashes.flush()   // send now (otherwise sent in the background)
+client.crashes.stop()          // stop and remove the exception handler
+```
+
+Reports wait on disk (at most 30; Application Support on Apple platforms, the temporary directory on Linux, or
+`start(directory:)`) until the server has them, and are retried on the next start when the device is offline. Once a
+day per install and release a session is sent, for crash-free users. If crash reporting is off for the project, the SDK
+stops sending for the run. On Apple platforms uncaught Objective-C exceptions (`NSException`) are written to disk as the
+app dies and sent on the next start; the previous handler is still called. Signals (`SIGABRT`, `SIGSEGV`, e.g. from
+`fatalError` or a force unwrap of nil) are not captured in this version.
+
 Documentation: https://stitchdb.com/docs/sdk/swift
 
 ## License
