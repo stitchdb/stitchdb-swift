@@ -137,6 +137,40 @@ also sent when the user signs in or out (a batch belongs to one user) and, on iO
 If analytics is off for the project, the SDK stops sending for the run. Calls to the analytics API are not recorded as
 crash-report breadcrumbs.
 
+## Deep links
+
+Short links (`https://<project host or your domain>/l/<code>`, made in Studio › Links or from the app) open your app on
+the right screen when it is installed (Universal Links) and otherwise send people to the App Store, Google Play or a web
+page.
+
+```swift
+// the app was opened with a link (SwiftUI .onOpenURL, or a Universal Link's NSUserActivity)
+.onOpenURL { url in Task { if let link = try await client.links.resolve(url) { router.open(link.path, link.data) } } }
+.onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+  Task { if let link = try await client.links.resolve(userActivity: activity) { router.open(link.path, link.data) } }
+}
+
+// first launch after an install: the link that led to the install (asked once per install, then nil)
+if let first = try await client.links.deferred() { router.open(first.path, first.data) }
+
+// make a link: signed-in users when the project allows it in Studio › Links, any link with the service key
+let made = try await client.links.create(LinkInput(path: "/invite/7", data: ["from": "ana"], title: "Join me"))
+share(made.url)
+
+// service key: list, stats, change, delete
+let page = try await client.links.list(search: "spring", limit: 20)
+let stats = try await client.links.get("summer", days: 30)   // clicks per day, platforms, countries, referrers
+try await client.links.update("summer", LinkInput(disabled: true))
+try await client.links.remove("summer")
+```
+
+`resolve` returns nil without a request for a URL that is not a short link (`LinksClient.codeFrom(_:)` gives the code);
+an expired or turned-off link throws `LinksError` with status 410. On iOS the platform `ios` is sent by default.
+`deferred()` matches the install to a click from the same network and platform within 2 hours (best effort, each click is
+handed out once); after an answer it remembers on the device that it asked and returns nil (`force: true` asks again).
+For Universal Links add `applinks:<your link host>` to the app's Associated Domains and your Team ID and bundle id in
+Studio › Links; StitchDB serves the `apple-app-site-association` file.
+
 Documentation: https://stitchdb.com/docs/sdk/swift
 
 ## License

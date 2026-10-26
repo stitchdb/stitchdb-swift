@@ -175,6 +175,10 @@ public final class StitchClient: Sendable {
   /// retention in Studio › Analytics. Nothing is sent before ``AnalyticsClient/start(release:beforeSend:flushInterval:)``.
   public let analytics: AnalyticsClient
 
+  /// Deep links and short links (Studio › Links): resolve the link the app was opened with, the link that led to an
+  /// install (``LinksClient/deferred(platform:referrer:force:)``), and make links.
+  public let links: LinksClient
+
   let _headers: HTTPFields
   /// The HTTP headers included in every request made by sub-clients.
   ///
@@ -308,6 +312,12 @@ public final class StitchClient: Sendable {
       }
     )
 
+    links = LinksClient(
+      url: stitchURL.appendingPathComponent("/links/v1"),
+      headers: _headers.dictionary,
+      directory: Self.linksDirectory(for: stitchURL)
+    )
+
     _realtime = UncheckedSendable(
       RealtimeClient(
         stitchURL.appendingPathComponent("/realtime/v1").absoluteString,
@@ -322,6 +332,7 @@ public final class StitchClient: Sendable {
     analytics.setFetch { [session = options.global.session, adapt = adaptRequest] request in
       try await session.data(for: adapt(request))
     }
+    links.setFetch(fetchWithAuth)
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()
