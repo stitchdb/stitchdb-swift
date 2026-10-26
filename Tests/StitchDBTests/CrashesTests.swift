@@ -29,7 +29,7 @@ final class CrashServerProtocol: URLProtocol {
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
-  private static func body(of request: URLRequest) -> Data {
+  static func body(of request: URLRequest) -> Data {
     if let body = request.httpBody { return body }
     guard let stream = request.httpBodyStream else { return Data() }
     stream.open()

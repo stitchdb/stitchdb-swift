@@ -82,11 +82,12 @@ public struct CrashReport: Codable, Sendable, Equatable {
 
 // MARK: - Helpers
 
-private func crashIsoNow() -> String {
+func crashIsoNow() -> String {
   Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(Date())
 }
 
-private let crashPlatform: String = {
+/// `ios` on iOS, `swift` elsewhere (crash reports and analytics).
+let crashPlatform: String = {
   #if os(iOS)
     return "ios"
   #else
@@ -94,7 +95,7 @@ private let crashPlatform: String = {
   #endif
 }()
 
-private let osName: String = {
+let osName: String = {
   #if os(macOS)
     return "macOS"
   #elseif os(visionOS)
@@ -169,6 +170,43 @@ private func deviceInfo() -> JSONObject {
   ]
   if let deviceModel { d["model"] = .string(deviceModel) }
   return d
+}
+
+/// Application Support (Caches on tvOS) on Apple platforms, the temporary directory elsewhere:
+/// `stitchdb-<kind>-<namespace>`, one folder per project.
+func stitchDataDirectory(_ kind: String, namespace: String) -> URL {
+  let fm = FileManager.default
+  #if os(tvOS)
+    let base = fm.urls(for: .cachesDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
+  #elseif canImport(Darwin)
+    let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
+  #else
+    let base = fm.temporaryDirectory
+  #endif
+  return base.appendingPathComponent("stitchdb-\(kind)-\(namespace)", isDirectory: true)
+}
+
+/// The project namespace of a client URL: the first label of the host.
+func stitchNamespace(for url: URL) -> String {
+  let host = url.host(percentEncoded: false) ?? "default"
+  return String(host.split(separator: ".").first ?? "default")
+}
+
+/// Sends a JSON request with `fetch` (which adds the access token) and returns the status code (0 without one).
+func sendJSON(
+  _ fetch: CrashesClient.Fetch?, _ url: URL, method: String = "POST", headers: [String: String],
+  body: (some Encodable)?
+) async throws -> Int {
+  guard let fetch else { throw URLError(.cancelled) }
+  var request = URLRequest(url: url)
+  for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+  request.httpMethod = method
+  if let body {
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONEncoder().encode(body)
+  }
+  let (_, response) = try await fetch(request)
+  return (response as? HTTPURLResponse)?.statusCode ?? 0
 }
 
 private func currentStack(dropping n: Int) -> String {
@@ -251,15 +289,7 @@ public final class CrashesClient: Sendable {
 
   /// Application Support (Caches on tvOS) on Apple platforms, the temporary directory elsewhere; one folder per project.
   public static func defaultDirectory(namespace: String) -> URL {
-    let fm = FileManager.default
-    #if os(tvOS)
-      let base = fm.urls(for: .cachesDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
-    #elseif canImport(Darwin)
-      let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
-    #else
-      let base = fm.temporaryDirectory
-    #endif
-    return base.appendingPathComponent("stitchdb-crashes-\(namespace)", isDirectory: true)
+    stitchDataDirectory("crashes", namespace: namespace)
   }
 
   func setFetch(_ fetch: @escaping Fetch) { self.fetch.setValue(fetch) }
@@ -391,12 +421,15 @@ public final class CrashesClient: Sendable {
   // MARK: API breadcrumbs
 
   /// Performs `perform` and, while reporting is started, records the call as an `api` breadcrumb: method, path, query
-  /// keys (no values, no host), status, error code and duration. Calls to `/crashes/v1/` are not recorded.
+  /// keys (no values, no host), status, error code and duration. Calls to `/crashes/v1/` and `/analytics/v1/` are not
+  /// recorded.
   func recording(
     _ request: URLRequest,
     _ perform: () async throws -> (Data, URLResponse)
   ) async throws -> (Data, URLResponse) {
-    guard isStarted, let requestURL = request.url, !requestURL.path.contains("/crashes/v1/") else {
+    guard isStarted, let requestURL = request.url, !requestURL.path.contains("/crashes/v1/"),
+      !requestURL.path.contains("/analytics/v1/")
+    else {
       return try await perform()
     }
     let t0 = Date()
@@ -549,14 +582,7 @@ public final class CrashesClient: Sendable {
   }
 
   private func post(_ path: String, _ body: some Encodable) async throws -> Int {
-    guard let fetch = fetch.value else { throw URLError(.cancelled) }
-    var request = URLRequest(url: url.appendingPathComponent(path))
-    for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONEncoder().encode(body)
-    let (_, response) = try await fetch(request)
-    return (response as? HTTPURLResponse)?.statusCode ?? 0
+    try await sendJSON(fetch.value, url.appendingPathComponent(path), headers: headers, body: body)
   }
 
   // MARK: Disk
@@ -655,7 +681,6 @@ enum UncaughtExceptions {
 extension StitchClient {
   /// The default directory for ``crashes``: one folder per project (see ``CrashesClient/defaultDirectory(namespace:)``).
   static func crashesDirectory(for url: URL) -> URL {
-    let host = url.host(percentEncoded: false) ?? "default"
-    return CrashesClient.defaultDirectory(namespace: String(host.split(separator: ".").first ?? "default"))
+    CrashesClient.defaultDirectory(namespace: stitchNamespace(for: url))
   }
 }

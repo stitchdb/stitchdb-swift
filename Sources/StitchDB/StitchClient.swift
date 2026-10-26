@@ -171,6 +171,10 @@ public final class StitchClient: Sendable {
   /// calls. Nothing is captured or sent before ``CrashesClient/start(release:environment:captureUnhandled:maxBreadcrumbs:directory:beforeSend:)``.
   public let crashes: CrashesClient
 
+  /// Product analytics: the events your app tracks, linked to the signed-in user, for active users, funnels and
+  /// retention in Studio › Analytics. Nothing is sent before ``AnalyticsClient/start(release:beforeSend:flushInterval:)``.
+  public let analytics: AnalyticsClient
+
   let _headers: HTTPFields
   /// The HTTP headers included in every request made by sub-clients.
   ///
@@ -267,7 +271,7 @@ public final class StitchClient: Sendable {
     )
     self.crashes = crashes
 
-    _auth = AuthClient(
+    let auth = AuthClient(
       url: stitchURL.appendingPathComponent("/auth/v1"),
       headers: _headers.dictionary,
       flowType: options.auth.flowType,
@@ -286,6 +290,23 @@ public final class StitchClient: Sendable {
       autoRefreshToken: options.auth.autoRefreshToken,
       emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
     )
+    _auth = auth
+
+    analytics = AnalyticsClient(
+      url: stitchURL.appendingPathComponent("/analytics/v1"),
+      headers: _headers.dictionary,
+      directory: Self.analyticsDirectory(for: stitchURL),
+      logger: options.global.logger,
+      authChanges: { handler in
+        // sign-in and sign-out only: a token refresh keeps the same user
+        let task = Task { [changes = auth.authStateChanges] in
+          for await (event, _) in changes where [.signedIn, .signedOut, .userDeleted].contains(event) {
+            handler()
+          }
+        }
+        return { task.cancel() }
+      }
+    )
 
     _realtime = UncheckedSendable(
       RealtimeClient(
@@ -296,6 +317,9 @@ public final class StitchClient: Sendable {
     )
 
     crashes.setFetch { [session = options.global.session, adapt = adaptRequest] request in
+      try await session.data(for: adapt(request))
+    }
+    analytics.setFetch { [session = options.global.session, adapt = adaptRequest] request in
       try await session.data(for: adapt(request))
     }
 

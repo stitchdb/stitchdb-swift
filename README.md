@@ -107,6 +107,36 @@ stops sending for the run. On Apple platforms uncaught Objective-C exceptions (`
 app dies and sent on the next start; the previous handler is still called. Signals (`SIGABRT`, `SIGSEGV`, e.g. from
 `fatalError` or a force unwrap of nil) are not captured in this version.
 
+## Analytics
+
+The events your app tracks, linked to the signed-in user (an anonymous id before sign-in, merged into the user when
+they sign in), for active users, funnels, retention and breakdowns by release, platform, OS and country in
+Studio › Analytics.
+
+```swift
+client.analytics.start(release: "1.4.0")   // nothing is sent before start()
+
+client.analytics.track("purchase", props: ["plan": "pro", "amount": 29])
+
+// filtering: change an event or return nil to drop it
+client.analytics.start(release: "1.4.0", beforeSend: { event in event.name == "debug" ? nil : event })
+
+await client.analytics.flush()      // send now (otherwise every 10 s or when 20 events wait)
+await client.analytics.optOut()     // deletes the user's events and tracks nothing more (remembered on the device)
+await client.analytics.optIn()
+client.analytics.isOptedOut
+client.analytics.anonymousId        // the id of this install before sign-in
+client.analytics.stop()             // stop sending; waiting events stay on the device
+```
+
+Event names are letters, digits, `_ $ . : - /` and spaces, up to 64 characters (other names are dropped, with a debug
+log); props are a JSON object of at most 8 KB. Events tracked before `start()` wait in memory (at most 100). After
+start they wait on disk (at most 1000, the oldest are dropped; Application Support on Apple platforms, the temporary
+directory on Linux), so events tracked offline survive an app kill and are sent on the next start. Waiting events are
+also sent when the user signs in or out (a batch belongs to one user) and, on iOS, when the app goes to the background.
+If analytics is off for the project, the SDK stops sending for the run. Calls to the analytics API are not recorded as
+crash-report breadcrumbs.
+
 Documentation: https://stitchdb.com/docs/sdk/swift
 
 ## License
