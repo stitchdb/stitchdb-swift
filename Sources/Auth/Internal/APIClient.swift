@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import Helpers
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
@@ -62,13 +63,44 @@ struct APIClient: Sendable {
       request.headers[.apiVersionHeaderName] = apiVersions[._20240101]!.name.rawValue
     }
 
-    let response = try await http.send(request)
+    var response = try await http.send(request)
+
+    if !(200..<300 ~= response.statusCode), SignupCheck.applies(to: request),
+      let retry = await signupCheckRetry(request, response)
+    {
+      response = try await http.send(retry)
+    }
 
     guard 200..<300 ~= response.statusCode else {
       throw await handleError(response: response, for: session)
     }
 
     return response
+  }
+
+  /// Fake sign-up protection: when the project asks for its built-in check (`captcha_required`), solves it (a proof of
+  /// work, a fraction of a second, off the main thread) and returns the request to send once more.
+  private func signupCheckRetry(_ request: Helpers.HTTPRequest, _ response: Helpers.HTTPResponse) async
+    -> Helpers.HTTPRequest?
+  {
+    guard let found = SignupCheck.challenge(in: response.data),
+      let body = request.body, var json = try? JSONDecoder().decode(JSONObject.self, from: body),
+      json["stitchdb_captcha"] == nil
+    else { return nil }
+    var challenge = found
+    if challenge == nil {
+      var get = Helpers.HTTPRequest(url: configuration.url.appendingPathComponent("challenge"), method: .get)
+      get.headers = HTTPFields(configuration.headers)
+      if let answer = try? await http.send(get), 200..<300 ~= answer.statusCode {
+        challenge = try? JSONDecoder().decode(JSONObject.self, from: answer.data)
+      }
+    }
+    guard let challenge, let token = await SignupCheck.solve(challenge) else { return nil }
+    json["stitchdb_captcha"] = .string(token)
+    var retry = request
+    guard let encoded = try? JSONEncoder().encode(json) else { return nil }
+    retry.body = encoded
+    return retry
   }
 
   @discardableResult

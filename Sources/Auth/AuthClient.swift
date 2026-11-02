@@ -399,7 +399,7 @@ public actor AuthClient {
           SignUpRequest(
             email: email,
             password: password,
-            data: data,
+            data: withLocale(data, preferred: SignupLocale.value(for: configuration.url)),
             metaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
@@ -433,7 +433,7 @@ public actor AuthClient {
             password: password,
             phone: phone,
             channel: channel,
-            data: data,
+            data: withLocale(data, preferred: SignupLocale.value(for: configuration.url)),
             metaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
@@ -622,7 +622,7 @@ public actor AuthClient {
           OTPParams(
             email: email,
             createUser: shouldCreateUser,
-            data: data,
+            data: withLocale(data, preferred: SignupLocale.value(for: configuration.url)),
             metaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod
@@ -658,7 +658,7 @@ public actor AuthClient {
             phone: phone,
             createUser: shouldCreateUser,
             channel: channel,
-            data: data,
+            data: withLocale(data, preferred: SignupLocale.value(for: configuration.url)),
             metaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )
@@ -743,20 +743,29 @@ public actor AuthClient {
       )
     }
 
-    let session: Session = try await api.execute(
-      .init(
-        url: configuration.url.appendingPathComponent("token"),
-        method: .post,
-        query: [URLQueryItem(name: "grant_type", value: "pkce")],
-        body: configuration.resolvedEncoder.encode(
-          [
-            "auth_code": authCode,
-            "code_verifier": codeVerifier,
-          ]
+    // Codes from the hosted sign-in page (``signInWithHostedPage(redirectTo:view:lang:launchFlow:)``) are exchanged
+    // with the page itself.
+    let request: HTTPRequest =
+      if authCode.hasPrefix("sdbl_") {
+        try .init(
+          url: hostedPageBaseURL.appendingPathComponent("token"),
+          method: .post,
+          body: configuration.resolvedEncoder.encode(["code": authCode, "code_verifier": codeVerifier])
         )
-      )
-    )
-    .decoded(decoder: configuration.resolvedDecoder)
+      } else {
+        try .init(
+          url: configuration.url.appendingPathComponent("token"),
+          method: .post,
+          query: [URLQueryItem(name: "grant_type", value: "pkce")],
+          body: configuration.resolvedEncoder.encode(
+            [
+              "auth_code": authCode,
+              "code_verifier": codeVerifier,
+            ]
+          )
+        )
+      }
+    let session: Session = try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
 
     codeVerifierStorage.set(nil)
 
@@ -765,6 +774,123 @@ public actor AuthClient {
 
     return session
   }
+
+  /// `https://<ref>.p.stitchdb.com/login/v1`: the hosted sign-in page, next to `/auth/v1`.
+  nonisolated var hostedPageBaseURL: URL {
+    var base = configuration.url.absoluteString
+    while base.hasSuffix("/") { base.removeLast() }
+    if base.hasSuffix("/auth/v1") { base.removeLast("/auth/v1".count) }
+    return URL(string: base + "/login/v1") ?? configuration.url.appendingPathComponent("../../login/v1")
+  }
+
+  /// The URL of the project's hosted sign-in page (Studio › Authentication › Hosted sign-in), for
+  /// ``signInWithHostedPage(redirectTo:view:lang:launchFlow:)`` or your own browser flow. With the PKCE flow, the code
+  /// challenge is stored for the code that comes back.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: Where the user comes back to; one of the project's Redirect URLs (default
+  ///     ``AuthClient/Configuration/redirectToURL``).
+  ///   - view: Which form opens first.
+  ///   - lang: A language code such as `de` (default the page's choice from the browser).
+  nonisolated public func getHostedPageURL(
+    redirectTo: URL? = nil,
+    view: HostedPageView? = nil,
+    lang: String? = nil
+  ) throws -> URL {
+    guard var components = URLComponents(url: hostedPageBaseURL, resolvingAgainstBaseURL: false) else {
+      throw AuthError.implicitGrantRedirect(message: "Invalid hosted page URL")
+    }
+    components.path += "/"
+    var query: [URLQueryItem] = []
+    let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+    if let codeChallenge, let codeChallengeMethod {
+      query.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
+      query.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
+    }
+    if let redirect = redirectTo ?? configuration.redirectToURL {
+      query.append(URLQueryItem(name: "redirect_to", value: redirect.absoluteString))
+    }
+    if let view { query.append(URLQueryItem(name: "view", value: view.rawValue)) }
+    if let lang { query.append(URLQueryItem(name: "lang", value: lang)) }
+    if !query.isEmpty { components.queryItems = query }
+    guard let url = components.url else {
+      throw AuthError.implicitGrantRedirect(message: "Invalid hosted page URL")
+    }
+    return url
+  }
+
+  /// Signs the user in on the project's hosted sign-in page: sign-in, sign-up, e-mail link or code, password reset and
+  /// two-step codes, in your app's name and colours, with no auth screens to build. `launchFlow` opens the URL (in a
+  /// web authentication session) and returns the URL the page redirected back to; the session is read from it (an
+  /// `sdbl_` code with the PKCE flow).
+  @discardableResult
+  public func signInWithHostedPage(
+    redirectTo: URL? = nil,
+    view: HostedPageView? = nil,
+    lang: String? = nil,
+    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
+  ) async throws -> Session {
+    let url = try getHostedPageURL(redirectTo: redirectTo, view: view, lang: lang)
+    let resultURL = try await launchFlow(url)
+    return try await session(from: resultURL)
+  }
+
+  #if canImport(AuthenticationServices)
+    /// Signs the user in on the project's hosted sign-in page using ``ASWebAuthenticationSession``.
+    ///
+    /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the `configure` closure, as
+    ///   the method implementation calls it already.
+    @discardableResult
+    public func signInWithHostedPage(
+      redirectTo: URL? = nil,
+      view: HostedPageView? = nil,
+      lang: String? = nil,
+      configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
+    ) async throws -> Session {
+      try await signInWithHostedPage(redirectTo: redirectTo, view: view, lang: lang) {
+        @MainActor url in
+        try await withCheckedThrowingContinuation { [configuration] continuation in
+          guard let callbackScheme = (redirectTo ?? configuration.redirectToURL)?.scheme else {
+            preconditionFailure(
+              "Please, provide a valid redirect URL, either through `redirectTo` param, or globally through `AuthClient.Configuration.redirectToURL`."
+            )
+          }
+
+          #if !os(tvOS) && !os(watchOS)
+            var presentationContextProvider: DefaultPresentationContextProvider?
+          #endif
+
+          let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: callbackScheme
+          ) { url, error in
+            if let error {
+              continuation.resume(throwing: error)
+            } else if let url {
+              continuation.resume(returning: url)
+            } else {
+              fatalError("Expected url or error, but got none.")
+            }
+
+            #if !os(tvOS) && !os(watchOS)
+              _ = presentationContextProvider
+            #endif
+          }
+
+          configure(session)
+
+          #if !os(tvOS) && !os(watchOS)
+            if session.presentationContextProvider == nil {
+              presentationContextProvider = DefaultPresentationContextProvider()
+              session.presentationContextProvider = presentationContextProvider
+            }
+          #endif
+
+          session.start()
+        }
+      }
+    }
+  #endif
 
   /// Get a URL which you can use to start an OAuth flow for a third-party provider.
   ///

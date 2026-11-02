@@ -2128,3 +2128,11 @@ public struct GetClaimsOptions: Sendable {
     self.jwks = jwks
   }
 }
+
+/// Which form the hosted sign-in page opens on (``AuthClient/getHostedPageURL(redirectTo:view:lang:)``).
+public enum HostedPageView: String, Sendable, CaseIterable {
+  case signIn = "sign-in"
+  case signUp = "sign-up"
+  case magicLink = "magic-link"
+  case forgot
+}
