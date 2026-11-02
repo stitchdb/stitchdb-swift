@@ -43,6 +43,10 @@ public struct RealtimeChannelConfig: Sendable {
   /// See the [Realtime authorization guide](https://stitchdb.com/docs)
   /// for details.
   public var isPrivate: Bool
+
+  /// Message history: after every (re)join, deliver the broadcasts missed while offline first (see
+  /// ``RealtimeHistoryConfig``). Nil (the default) turns it off.
+  public var history: RealtimeHistoryConfig? = nil
 }
 
 protocol RealtimeChannelProtocol: AnyObject, Sendable {
@@ -140,6 +144,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// See `RealtimeChannel+Status.swift`.
   let statusStorage = LockIsolated(StatusStorage())
 
+  /// Message history (``RealtimeChannelConfig/history``) and ``publish(event:payload:)``; nil without a history URL.
+  let history: RealtimeHistory?
+
   init(
     topic: String,
     config: RealtimeChannelConfig,
@@ -155,6 +162,22 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
     let weakSelfRef = WeakChannelRef()
     let clientChanges = self.clientChanges
+    let callbackManager = self.callbackManager
+    if let historyURL = socket.historyURL {
+      self.history = RealtimeHistory(
+        topic: subTopic, isPrivate: config.isPrivate, url: historyURL, config: config.history, http: socket.http,
+        headers: { [weak socket] in
+          var headers: HTTPFields = [:]
+          if let apiKey = socket?.options.apikey { headers[.apiKey] = apiKey }
+          if let token = await socket?._getAccessToken() { headers[.authorization] = "Bearer \(token)" }
+          return headers
+        },
+        deliver: { event, payload in callbackManager.triggerBroadcast(event: event, json: payload) }
+      )
+    } else {
+      self.history = nil
+    }
+    let history = self.history
     self.stateManager = ChannelStateManager(
       topic: topic,
       logger: logger,
@@ -190,6 +213,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         // async observer-Task delay, so reads of ``status`` right after
         // ``subscribe()`` returns see the latest value.
         weakSelfRef.value?.yieldStatus(Self.mapState(state))
+        if case .subscribed = state, let history, history.enabled {
+          Task { await history.catchUp() }
+        }
       }
     )
 
@@ -432,6 +458,16 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
+  /// Stores a message in the channel's message history and broadcasts it to everyone subscribed (Studio › Realtime ›
+  /// Message history). Clients with ``RealtimeChannelConfig/history`` get it later if they are offline now.
+  ///
+  /// - Throws: A ``RealtimeError`` if the client has no history URL or the request fails.
+  @discardableResult
+  public func publish(event: String, payload: JSONObject) async throws -> RealtimeHistoryMessage {
+    guard let history else { throw RealtimeError("This Realtime client has no message history URL") }
+    return try await history.publish(event: event, payload: payload)
+  }
+
   public func broadcast(event: String, message: some Codable) async throws {
     try await broadcast(event: event, message: JSONObject(message))
   }
@@ -690,7 +726,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           throw RealtimeError("Expected 'event' key in 'payload' for broadcast event.")
         }
 
-        callbackManager.triggerBroadcast(event: event, json: payload)
+        if let history, history.enabled {
+          history.live(event: event, payload: payload)
+        } else {
+          callbackManager.triggerBroadcast(event: event, json: payload)
+        }
 
       case .close:
         // Phoenix tags `phx_close` with the `join_ref` of the join it closes.

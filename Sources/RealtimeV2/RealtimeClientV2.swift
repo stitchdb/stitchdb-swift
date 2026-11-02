@@ -25,6 +25,8 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
   var http: any HTTPClientType { get }
   var clock: any Clock<Duration> { get }
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL
+  /// `https://<ref>.p.stitchdb.com/history/v1` for message history, or nil.
+  var historyURL: URL? { get }
 
   func connect() async
   func push(_ message: RealtimeMessageV2)
@@ -37,6 +39,10 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
   func _getAccessToken() async -> String?
   func makeRef() -> String
   func _remove(_ channel: any RealtimeChannelProtocol)
+}
+
+extension RealtimeClientProtocol {
+  var historyURL: URL? { nil }
 }
 
 /// The entry point for StitchDB Realtime subscriptions.
@@ -979,6 +985,21 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// Topic and event are percent-encoded as individual path segments (so values containing
   /// `/` don't introduce extra path components), and a private channel adds `?private=true`.
+  /// `…/history/v1` next to `…/realtime/v1` (over HTTP(S)).
+  var historyURL: URL? {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+    if components.scheme == "wss" { components.scheme = "https" }
+    if components.scheme == "ws" { components.scheme = "http" }
+    var path = components.percentEncodedPath
+    while path.hasSuffix("/") { path.removeLast() }
+    if path.hasSuffix("/websocket") { path.removeLast("/websocket".count) }
+    guard path.hasSuffix("/realtime/v1") else { return nil }
+    path.removeLast("/realtime/v1".count)
+    components.percentEncodedPath = path + "/history/v1"
+    components.query = nil
+    return components.url
+  }
+
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       return url
