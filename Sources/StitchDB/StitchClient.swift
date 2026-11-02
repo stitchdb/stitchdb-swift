@@ -179,6 +179,40 @@ public final class StitchClient: Sendable {
   /// install (``LinksClient/deferred(platform:referrer:force:)``), and make links.
   public let links: LinksClient
 
+  /// Push notifications (Studio › Integrations › Push): register devices, topics, send (service key) and the in-app
+  /// inbox.
+  public let push: PushClient
+
+  /// In-app purchases and subscriptions (Studio › Integrations › In-app purchases): send App Store / Google Play
+  /// purchases, read the user's entitlements.
+  public let purchases: PurchasesClient
+
+  /// Durable background jobs (service key, server side): start, read, cancel and retry runs, read their logs.
+  public let jobs: JobsClient
+
+  /// Feature flags and remote config for the signed-in user, kept on the device.
+  public let flags: FlagsClient
+
+  /// Usage metering per customer: record usage and read it back.
+  public let metering: MeteringClient
+
+  /// The project's public status page: component states, uptime, incidents and e-mail updates.
+  public let status: StatusClient
+
+  let searchClient: SearchClient
+  let graphqlURL: URL
+
+  /// Organizations (teams, workspaces): create them, invite members, switch the active one. Needs Organizations turned
+  /// on (Studio › Authentication › Organizations).
+  public var orgs: OrgsClient {
+    OrgsClient(
+      rpc: { [rest] function, args in
+        try await rest.rpc(function, params: args).execute().data
+      },
+      refresh: { [auth = _auth] in _ = try? await auth.refreshSession() }
+    )
+  }
+
   let _headers: HTTPFields
   /// The HTTP headers included in every request made by sub-clients.
   ///
@@ -326,6 +360,31 @@ public final class StitchClient: Sendable {
       )
     )
 
+    push = PushClient(
+      url: stitchURL.appendingPathComponent("/push/v1"),
+      headers: _headers.dictionary,
+      currentUserID: { [auth] in try? await auth.session.user.id.uuidString.lowercased() }
+    )
+    purchases = PurchasesClient(url: stitchURL.appendingPathComponent("/purchases/v1"), headers: _headers.dictionary)
+    jobs = JobsClient(url: stitchURL.appendingPathComponent("/jobs/v1"), headers: _headers.dictionary)
+    flags = FlagsClient(
+      url: stitchURL.appendingPathComponent("/flags/v1"),
+      headers: _headers.dictionary,
+      directory: FlagsClient.defaultDirectory(namespace: stitchNamespace(for: stitchURL)),
+      authChanges: { handler in
+        let task = Task { [changes = auth.authStateChanges] in
+          for await (event, _) in changes where [.signedIn, .signedOut, .userDeleted].contains(event) {
+            handler()
+          }
+        }
+        return { task.cancel() }
+      }
+    )
+    metering = MeteringClient(url: stitchURL.appendingPathComponent("/metering/v1"), headers: _headers.dictionary)
+    status = StatusClient(url: stitchURL.appendingPathComponent("/status/v1"))
+    searchClient = SearchClient(url: stitchURL.appendingPathComponent("/search/v1"), headers: _headers.dictionary)
+    graphqlURL = stitchURL.appendingPathComponent("/graphql/v1")
+
     crashes.setFetch { [session = options.global.session, adapt = adaptRequest] request in
       try await session.data(for: adapt(request))
     }
@@ -333,6 +392,20 @@ public final class StitchClient: Sendable {
       try await session.data(for: adapt(request))
     }
     links.setFetch(fetchWithAuth)
+
+    push.setFetch(fetchWithAuth)
+    purchases.setFetch(fetchWithAuth)
+    jobs.setFetch(fetchWithAuth)
+    flags.setFetch(fetchWithAuth)
+    metering.setFetch(fetchWithAuth)
+    searchClient.setFetch(fetchWithAuth)
+    status.setFetch { [session = options.global.session] request in
+      try await session.data(for: TraceContext.inject(into: request))
+    }
+    push.setChannels(
+      open: { [weak self] name in self?.channel(name) },
+      remove: { [weak self] channel in await self?.removeChannel(channel) }
+    )
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()
@@ -381,6 +454,54 @@ public final class StitchClient: Sendable {
   /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
     rest.schema(schema)
+  }
+
+  /// Searches a table (Studio › Database › Search): full text, similar meaning (semantic) or both (hybrid), with row
+  /// level security like ``from(_:)``.
+  ///
+  /// ```swift
+  /// let hits = try await stitchdb.search("articles", "how do refunds work", options: SearchOptions(limit: 10))
+  /// ```
+  public func search<Row: Decodable & Sendable>(
+    _ table: String, _ query: String, options: SearchOptions = SearchOptions(), as: Row.Type = JSONObject.self
+  ) async throws -> SearchResults<Row> {
+    try await searchClient.search(table, query, options: options, as: Row.self)
+  }
+
+  /// Runs a GraphQL query or mutation against `/graphql/v1` (Studio › API › GraphQL), with the same keys and row level
+  /// security as REST. Never throws: failures are in ``GraphQLResponse/error``.
+  ///
+  /// ```swift
+  /// let answer = await stitchdb.graphql("query { todosCollection(first: 5) { edges { node { id task } } } }")
+  /// ```
+  public func graphql(
+    _ query: String, variables: JSONObject = [:], operationName: String? = nil, headers: [String: String] = [:]
+  ) async -> GraphQLResponse {
+    await graphqlRequest(
+      url: graphqlURL, fetch: fetchWithAuth, headers: _headers.dictionary, query: query, variables: variables,
+      operationName: operationName, extraHeaders: headers
+    )
+  }
+
+  /// A connection for collaborative documents (Yjs) over one WebSocket, with your Yjs implementation plugged in
+  /// through ``CollabYjs``.
+  ///
+  /// - Parameter compactAfter: Store the whole document as one update once it has this many (default 200).
+  public func collab(yjs: any CollabYjs, compactAfter: Int = 200) -> CollabClient {
+    let http = ServiceHTTP(url: stitchURL.appendingPathComponent("/collab/v1"), headers: _headers.dictionary)
+    http.setFetch(fetchWithAuth)
+    var ws = URLComponents(url: stitchURL.appendingPathComponent("/collab/v1/ws"), resolvingAgainstBaseURL: false)
+    let scheme = ws?.scheme == "http" ? "ws" : "wss"
+    ws?.scheme = scheme
+    return CollabClient(
+      wsURL: ws?.url ?? stitchURL.appendingPathComponent("/collab/v1/ws"),
+      http: http,
+      apikey: stitchKey,
+      getToken: { [getAccessToken = accessTokenProvider] in try? await getAccessToken() },
+      connect: stitchWebSocketConnect(session: options.global.session),
+      yjs: yjs,
+      compactAfter: compactAfter
+    )
   }
 
   /// All active Realtime channels.

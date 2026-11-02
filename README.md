@@ -18,6 +18,8 @@ targets: [
 
 Or in Xcode: **File → Add Package Dependencies…** and paste `https://github.com/stitchdb/stitchdb-swift.git`.
 
+Current version: 1.4.0.
+
 ## Usage
 
 ```swift
@@ -170,6 +172,127 @@ an expired or turned-off link throws `LinksError` with status 410. On iOS the pl
 handed out once); after an answer it remembers on the device that it asked and returns nil (`force: true` asks again).
 For Universal Links add `applinks:<your link host>` to the app's Associated Domains and your Team ID and bundle id in
 Studio › Links; StitchDB serves the `apple-app-site-association` file.
+
+## Sign-in extras
+
+```swift
+// the project's hosted sign-in page (Studio › Authentication › Hosted sign-in), in a web authentication session
+let session = try await client.auth.signInWithHostedPage(redirectTo: URL(string: "myapp://login")!, view: .signUp)
+// or only the URL, for your own browser flow; the `sdbl_` code that comes back is exchanged by session(from:)
+let url = try client.auth.getHostedPageURL(redirectTo: URL(string: "myapp://login")!, lang: "de")
+```
+
+When the project's fake sign-up protection asks for its built-in check (`captcha_required`), `signUp` and
+`signInWithOTP` solve it (a small SHA-256 proof of work, on a background task) and send the request once more. They
+also add the device's language as `locale` to the user metadata (unless it has `locale`, `language` or `lang`), so auth
+e-mails go out in the user's language.
+
+## Push notifications
+
+```swift
+// AppDelegate: application(_:didRegisterForRemoteNotificationsWithDeviceToken:)
+try await client.push.register(.apns(deviceToken, topics: ["news"]))
+try await client.push.subscribe(topic: "offers", device: .apns(deviceToken))
+
+// the in-app inbox
+let inbox = try await client.push.inbox(unread: true)
+try await client.push.markRead(inbox.notifications.map(\.id))
+let stop = try await client.push.onNotification { note in showBanner(note.title) }
+
+// server side, service key
+try await admin.push.send(PushMessage(userID: id, title: "Your order shipped", data: ["order": "42"]))
+```
+
+## In-app purchases
+
+```swift
+// after a StoreKit 2 purchase (or for each update in Transaction.updates)
+let result = try await product.purchase()
+if case .success(let verification) = result { try await client.purchases.sync(verification) }
+
+if try await client.purchases.hasEntitlement("pro") { unlockPro() }
+let state = try await client.purchases.me()   // purchases and active entitlements
+```
+
+StitchDB verifies the transaction with the App Store and keeps the user's entitlements; on Linux use
+`sync(signedTransaction:)` with the JWS.
+
+## Organizations
+
+```swift
+let team = try await client.orgs.create(name: "Acme")
+try await client.orgs.invite(team.id, email: "bo@example.com", role: "admin")
+let mine = try await client.orgs.list()
+try await client.orgs.setActive(team.id)   // the session's org_id / org_role claims are now for Acme
+```
+
+Send the header `x-org-id` (`OrgsClient.headerName`) to make `auth.org_id()` another organization the user is a member
+of for a request.
+
+## Realtime message history
+
+```swift
+let room = client.channel("room:42") { $0.history = RealtimeHistoryConfig(since: Date().addingTimeInterval(-3600)) }
+room.onBroadcast(event: "chat") { message in show(message) }   // missed messages first (meta.replayed), then live
+try await room.subscribeWithError()
+try await room.publish(event: "chat", payload: ["text": "hi"])  // stored, then broadcast
+```
+
+## Search, GraphQL and the status page
+
+```swift
+let hits = try await client.search("articles", "how do refunds work", options: SearchOptions(limit: 10, mode: .hybrid))
+
+let answer = await client.graphql("query { todosCollection(first: 5) { edges { node { id task } } } }")
+if let error = answer.error { print(error.message) }
+
+let page = try await client.status.get()
+if page.overall != "operational" { showBanner(page.overallLabel) }
+try await client.status.subscribe(email: "ana@example.com")
+```
+
+## Feature flags and usage metering
+
+```swift
+try await client.flags.load(attributes: ["app_version": "2.4.1"])
+if client.flags.isOn("new-checkout") { showNewCheckout() }
+let limit = client.flags.get("upload-limit-mb", default: 10)
+
+try await client.metering.record("exports")                 // signed in: meters marked "apps may record"
+let usage = try await admin.metering.usage(customer: org.id, group: .month)
+```
+
+## Collaborative documents
+
+Yjs documents kept in sync between everyone who has them open, stored with history. The SDK carries Yjs updates as
+bytes; plug in any Yjs implementation (for example bindings to the y-crdt Rust library) through `CollabYjs` and
+`CollabDocument`.
+
+```swift
+let collab = client.collab(yjs: MyYrsAdapter())
+let room = try await collab.open("plan-2026", document: myDoc, create: true, title: "Plan 2026")
+room.setPresence(["name": "Ann", "cursor": 4])
+let token = room.onPresence { peers in drawCursors(peers) }
+try await room.snapshot(label: "Before the review")
+try await collab.share("plan-2026", userID: bo, role: "editor")
+```
+
+## Background jobs and serverless SQL (server side only)
+
+These need secrets that must never ship in an app: use them in a server, a script or a command line tool.
+
+```swift
+let admin = StitchClient(stitchURL: projectURL, stitchKey: serviceKey)
+let run = try await admin.jobs.start("export", payload: ["user_id": .string(id)], options: JobStartOptions(mode: .long))
+let logs = try await admin.jobs.logs(run.id)
+
+// SQL key (Studio › Database › Serverless SQL): runs as the project's owner, past row level security
+let sql = try StitchSQL(connection: ProcessInfo.processInfo.environment["STITCHDB_SQL_URL"]!)
+let rows = try await sql.query("select * from todos where owner = $1 limit 20", [.string(userID)])
+let db = try await sql.connect()   // interactive transactions over a WebSocket session
+try await db.transaction { tx in try await tx.query("update accounts set balance = balance - 1 where id = $1", [1]) }
+db.close()
+```
 
 Documentation: https://stitchdb.com/docs/sdk/swift
 
