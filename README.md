@@ -9,7 +9,7 @@ Swift Package Manager:
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/stitchdb/stitchdb-swift.git", from: "1.4.1")
+  .package(url: "https://github.com/stitchdb/stitchdb-swift.git", branch: "main")
 ],
 targets: [
   .target(name: "YourApp", dependencies: [.product(name: "StitchDB", package: "stitchdb-swift")])
