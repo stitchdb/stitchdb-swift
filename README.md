@@ -9,7 +9,7 @@ Swift Package Manager:
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/stitchdb/stitchdb-swift.git", branch: "main")
+  .package(url: "https://github.com/stitchdb/stitchdb-swift.git", from: "1.4.1")
 ],
 targets: [
   .target(name: "YourApp", dependencies: [.product(name: "StitchDB", package: "stitchdb-swift")])
@@ -18,7 +18,7 @@ targets: [
 
 Or in Xcode: **File → Add Package Dependencies…** and paste `https://github.com/stitchdb/stitchdb-swift.git`.
 
-Current version: 1.4.0.
+Current version: 1.4.1.
 
 ## Usage
 

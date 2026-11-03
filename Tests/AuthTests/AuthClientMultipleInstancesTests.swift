@@ -100,10 +100,15 @@ struct AuthClientMultipleInstancesTests {
       )
       sessionManager = Dependencies[client.clientID].sessionManager
 
-      await client.startAutoRefresh()
-      await Task.megaYield()
+      // `startAutoRefresh()` starts the loop from a task it doesn't await: poll until it runs.
+      client.startAutoRefresh()
+      var started = await sessionManager.isAutoRefreshRunning()
+      for _ in 0..<100 where !started {
+        try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
+        started = await sessionManager.isAutoRefreshRunning()
+      }
 
-      #expect(await sessionManager.isAutoRefreshRunning())
+      #expect(started)
     }
 
     // `deinit` stops the auto-refresh loop from a detached task, so poll instead of asserting
@@ -115,5 +120,27 @@ struct AuthClientMultipleInstancesTests {
     }
 
     #expect(isAutoRefreshRunning == false)
+  }
+
+  @Test
+  func startAutoRefreshAfterDeinitDoesNotStart() async {
+    let url = URL(string: "http://localhost:54321/auth")!
+    let sessionManager: SessionManager
+
+    do {
+      let client = AuthClient(
+        configuration: AuthClient.Configuration(
+          url: url,
+          localStorage: InMemoryLocalStorage(),
+          logger: nil
+        )
+      )
+      sessionManager = Dependencies[client.clientID].sessionManager
+    }
+
+    // The client is gone: a start arriving now (e.g. from an unawaited `startAutoRefresh()`)
+    // is ignored instead of running a loop that reads the removed dependencies.
+    await sessionManager.startAutoRefresh()
+    #expect(await sessionManager.isAutoRefreshRunning() == false)
   }
 }

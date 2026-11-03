@@ -158,12 +158,25 @@ private actor LiveSessionManager {
     return true
   }
 
+  /// Whether the client still exists. `AuthClient.deinit` drops its dependencies entry, and every
+  /// non-lenient lookup after that is a `fatalError`.
+  private func isClientAlive() -> Bool {
+    Dependencies.instances.value[clientID] != nil
+  }
+
   func startAutoRefreshToken() {
+    // `AuthClient.startAutoRefresh()` starts this from an unawaited task, so it can run after the
+    // client was deallocated (and after `deinit` already stopped auto-refresh): never start then.
+    guard isClientAlive() else { return }
     logger?.debug("start auto refresh token")
 
     startAutoRefreshTokenTask?.cancel()
     startAutoRefreshTokenTask = Task {
       while !Task.isCancelled {
+        guard isClientAlive() else {
+          startAutoRefreshTokenTask = nil
+          return
+        }
         await autoRefreshTokenTick()
         try? await Task.sleep(nanoseconds: NSEC_PER_SEC * UInt64(autoRefreshTickDuration))
       }
@@ -193,7 +206,7 @@ private actor LiveSessionManager {
         "access token expires in \(expiresInTicks) ticks, a tick lasts \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
       )
 
-      if expiresInTicks <= autoRefreshTickThreshold {
+      if expiresInTicks <= autoRefreshTickThreshold, isClientAlive() {
         _ = try? await refreshSession(session.refreshToken)
       }
     }
