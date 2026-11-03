@@ -101,7 +101,7 @@ struct AuthClientMultipleInstancesTests {
       sessionManager = Dependencies[client.clientID].sessionManager
 
       // `startAutoRefresh()` starts the loop from a task it doesn't await: poll until it runs.
-      client.startAutoRefresh()
+      await client.startAutoRefresh()
       var started = await sessionManager.isAutoRefreshRunning()
       for _ in 0..<100 where !started {
         try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
